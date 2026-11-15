@@ -194,6 +194,16 @@ export interface components {
             app_id: components["schemas"]["app_id"];
             name: string;
         };
+        /** @description 失敗したときの理由。 */
+        error: {
+            code: string;
+            /** @description 人が読む説明（日本語）。 */
+            message: string;
+        };
+        /** @description API のエラーの本文。 */
+        error_response: {
+            error: components["schemas"]["error"];
+        };
         /**
          * @description 部品の辞書の中の、部品の名前。
          * @example 7
@@ -231,16 +241,6 @@ export interface components {
                     actions: ("press_key" | "tap" | "expect_text")[];
                 };
             };
-        };
-        /** @description 失敗したときの理由。 */
-        error: {
-            code: string;
-            /** @description 人が読む説明（日本語）。 */
-            message: string;
-        };
-        /** @description API のエラーの本文。 */
-        error_response: {
-            error: components["schemas"]["error"];
         };
         /** @description このステップの説明（日本語）。人のレビューと結果の画面に出す。 */
         note: string;
@@ -405,6 +405,15 @@ export interface components {
                 "application/json": components["schemas"]["error_response"];
             };
         };
+        /** @description server の中で想定していない誤りが起きた（error.code は internal_error） */
+        internal_error: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["error_response"];
+            };
+        };
     };
     parameters: {
         app_id: components["schemas"]["app_id"];
@@ -434,6 +443,7 @@ export interface operations {
                     "application/json": components["schemas"]["app_summary"][];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     getPartDictionary: {
@@ -457,6 +467,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["not_found"];
+            500: components["responses"]["internal_error"];
         };
     };
     validateTestcase: {
@@ -481,6 +492,7 @@ export interface operations {
                     "application/json": components["schemas"]["validation_result"];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     listTestcases: {
@@ -503,6 +515,7 @@ export interface operations {
                     "application/json": components["schemas"]["testcase_record"][];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     registerTestcase: {
@@ -536,6 +549,7 @@ export interface operations {
                     "application/json": components["schemas"]["validation_result"];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     getTestcase: {
@@ -559,6 +573,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["not_found"];
+            500: components["responses"]["internal_error"];
         };
     };
     deleteTestcase: {
@@ -580,6 +595,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["not_found"];
+            500: components["responses"]["internal_error"];
         };
     };
     approveTestcase: {
@@ -612,6 +628,7 @@ export interface operations {
                     "application/json": components["schemas"]["error_response"];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     runTestcase: {
@@ -644,6 +661,7 @@ export interface operations {
                     "application/json": components["schemas"]["error_response"];
                 };
             };
+            500: components["responses"]["internal_error"];
             /** @description runner に届かない */
             502: {
                 headers: {
@@ -675,6 +693,7 @@ export interface operations {
                     "application/json": components["schemas"]["run"][];
                 };
             };
+            500: components["responses"]["internal_error"];
         };
     };
     getRun: {
@@ -698,6 +717,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["not_found"];
+            500: components["responses"]["internal_error"];
         };
     };
     getScreenshot: {
@@ -721,6 +741,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["not_found"];
+            500: components["responses"]["internal_error"];
         };
     };
 }
