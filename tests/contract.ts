@@ -14,7 +14,7 @@ export function readExample<T>(name: string): T {
 const ajv = new Ajv2020({ allErrors: true, strict: false, discriminator: true });
 addFormats(ajv);
 for (const file of readdirSync(`${contractsDir}schemas`)) {
-  const schema = JSON.parse(readFileSync(`${contractsDir}schemas/${file}`, "utf8"));
+  const schema = JSON.parse(readFileSync(`${contractsDir}schemas/${file}`, "utf8")) as object;
   ajv.addSchema({ ...schema, $id: file });
 }
 

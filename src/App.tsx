@@ -14,15 +14,18 @@ export function App({ api, pollMs = 0 }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    try {
-      const list = await api.listTestcases();
-      setTestcases(list);
-      setLoadError(null);
-    } catch (e) {
-      setLoadError((e as Error).message);
-    }
-  }, [api]);
+  // 状態は読み終えたあとのコールバックで変える（effect の中から同期で setState しない）。
+  const reload = useCallback(
+    () =>
+      api.listTestcases().then(
+        (list) => {
+          setTestcases(list);
+          setLoadError(null);
+        },
+        (e: unknown) => setLoadError((e as Error).message),
+      ),
+    [api],
+  );
 
   useEffect(() => {
     void reload();

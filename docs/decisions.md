@@ -4,6 +4,16 @@
 
 ---
 
+## W6. ESLint を関門に足す
+
+- 決めた人：AI　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
+- ESLint（flat config、`eslint.config.js`）に、`@eslint/js` の recommended、typescript-eslint の `recommendedTypeChecked`、eslint-plugin-react-hooks の recommended を入れた。型の情報を使う規則にしたのは、待ち忘れの Promise（`no-floating-promises`）や `any` の持ち込みを止めたいため。ファイルが少なく、遅さは気にならない。
+- `npm run lint` は `--max-warnings 0`。依存の配列の漏れ（`exhaustive-deps`）は警告で出るので、警告も止める。
+- 生成物（`src/contracts/`・`src/demo/data/`）と出力は見ない。生成物は契約との一致をテストで確かめている。
+- 書式の規則は入れない。書式は prettier の関門に任せる。
+- 画面の文言の全角の空白は、区切りとして使っているので許す（`no-irregular-whitespace` の `skipJSXText`）。
+- 一覧の読み込み（`App.tsx`）は、`setState` を読み終えたあとのコールバックで呼ぶ形に直した。effect の中から同期で `setState` を呼ぶ形を、react-hooks の `set-state-in-effect` が止めるため。動きは変わらない。
+
 ## W4. デモ版（Vercel）は、ブラウザの中の偽の server で動かす
 
 - 決めた人：AI　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
