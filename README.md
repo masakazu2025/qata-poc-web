@@ -18,8 +18,10 @@ pull request と main への push のたびに、GitHub Actions（`.github/workf
 
 ```
 npm ci
-npm run check          # 型の検査・テスト（生成した型と契約・画面）・書式
+npm run check          # 型の検査・lint（ESLint）・テスト（生成した型と契約・画面）・書式
 ```
+
+lint は `npm run lint` だけでも回せます。警告も一つあれば止まります（`--max-warnings 0`）。設定は `eslint.config.js`。
 
 テストの偽の server が返すものは、すべて親の契約（JSON Schema）で判定します。
 

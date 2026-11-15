@@ -16,10 +16,7 @@ async function connectMcp(): Promise<Client> {
       command: "uv",
       args: ["run", "--directory", serverDir, "qata-server-mcp"],
       // REST の server と同じ保存先を見る（qata-server の README）
-      env: { ...process.env, QATA_DATA_DIR: dataDir, QATA_RUNNER_URL: runnerUrl } as Record<
-        string,
-        string
-      >,
+      env: { ...process.env, QATA_DATA_DIR: dataDir, QATA_RUNNER_URL: runnerUrl },
       stderr: "pipe",
     }),
   );
@@ -52,7 +49,7 @@ test("MCP で登録したテストケースを、web で承認して実行し、
       // 日本語の手順から AI が作るものとして、契約の例を使う
       const example = JSON.parse(
         readFileSync(path.join(parentDir, "contracts/examples/testcase.add.json"), "utf-8"),
-      );
+      ) as Structured;
       const testcase = { ...example, title, needs_review: true };
 
       const validation = await call(client, "validate_testcase", { testcase });
