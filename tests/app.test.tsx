@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { createApi, type Run, type TestcaseRecord } from "../src/api";
@@ -23,22 +23,30 @@ function failedRun(testcaseId: string, runId: string): Run {
   return run;
 }
 
-/** 今いる URL を、テストから読めるように出す。 */
+/** 今いる URL を、テストから読めるように出す。ブラウザの「戻る」の代わりのボタンも置く。 */
 function Location() {
-  return <output aria-label="URL">{useLocation().pathname}</output>;
+  const navigate = useNavigate();
+  return (
+    <>
+      <output aria-label="URL">{useLocation().pathname}</output>
+      <button type="button" onClick={() => void navigate(-1)}>
+        ブラウザで戻る
+      </button>
+    </>
+  );
 }
 
-function renderAt(fetchImpl: typeof fetch, url = "/") {
+function renderAt(fetchImpl: typeof fetch, url = "/", pollMs = 0) {
   render(
     <MemoryRouter initialEntries={[url]}>
-      <App api={createApi(BASE, fetchImpl)} />
+      <App api={createApi(BASE, fetchImpl)} pollMs={pollMs} />
       <Location />
     </MemoryRouter>,
   );
 }
 
-function start(server: FakeServer, url = "/") {
-  renderAt(server.fetch, url);
+function start(server: FakeServer, url = "/", pollMs = 0) {
+  renderAt(server.fetch, url, pollMs);
   return userEvent.setup();
 }
 
@@ -110,6 +118,64 @@ describe("URL を開く", () => {
   it("ない実行の結果の URL を開くと、見つからないと出る", async () => {
     start(createFakeServer([exampleRecord()], [exampleRun()]), "/testcases/tc_1/runs/run_none");
     expect(await screen.findByText(/この実行の結果は見つかりません/)).toBeVisible();
+  });
+});
+
+describe("ほかからの変更と、画面の行き来", () => {
+  it("開いたままの詳細に、ほかでの承認が出る", async () => {
+    const server = createFakeServer([pendingRecord()]);
+    start(server, "/testcases/tc_pending", 30);
+    expect(await screen.findByRole("button", { name: "承認する" })).toBeVisible();
+    server.testcases[0] = { ...server.testcases[0], review_status: "approved" };
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "承認する" })).not.toBeInTheDocument();
+  });
+
+  it("開いている間にほかで消されると、見つからないと出て、実行できない", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    start(server, "/testcases/tc_1", 30);
+    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+    server.testcases.splice(0, 1);
+    expect(await screen.findByRole("alert")).toHaveTextContent("見つかりません");
+    expect(screen.queryByRole("button", { name: "実行する" })).not.toBeInTheDocument();
+  });
+
+  it("消したあと戻ると、消したものは出ず、見つからないと出る", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = start(createFakeServer([exampleRecord()]));
+    await openTestcase(user);
+    await user.click(screen.getByRole("button", { name: "消す" }));
+    expect(await screen.findByText("左の一覧からテストケースを選んでください。")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "ブラウザで戻る" }));
+    expect(currentUrl()).toHaveTextContent("/testcases/tc_1");
+    expect(await screen.findByRole("alert")).toHaveTextContent("見つかりません");
+    expect(screen.queryByRole("button", { name: "実行する" })).not.toBeInTheDocument();
+  });
+
+  it("実行中にほかのテストケースへ移ると、終わっても引き戻されない", async () => {
+    const server = createFakeServer([exampleRecord(), { ...exampleRecord(), id: "tc_2" }]);
+    let finishRun = () => {};
+    const slowFetch: typeof fetch = async (input, init) => {
+      const request = input as Request;
+      if (request.method === "POST" && request.url.endsWith("/runs")) {
+        await new Promise<void>((resolve) => (finishRun = resolve));
+      }
+      return server.fetch(input, init);
+    };
+    renderAt(slowFetch, "/testcases/tc_1");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "実行する" }));
+    expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+
+    const links = within(sidebar()).getAllByRole("link", { name: TITLE });
+    await user.click(links[1]);
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
+    finishRun();
+    await vi.waitFor(() => expect(server.calls).toContain("POST /testcases/tc_1/runs"));
+    // 実行の結果が届いて入れ物が直るまで待ってから、URL を見る
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
   });
 });
 

@@ -23,15 +23,16 @@ export function TestcasePage({ api, pollMs }: PageProps) {
     refetchInterval: pollInterval(pollMs),
   });
 
-  if (record.data) {
-    return <TestcaseDetail key={testcaseId} api={api} record={record.data} selectedRunId={runId} />;
-  }
+  // 読み直しが失敗したら、前に読んだものがあってもエラーを出す。ほかで消されたものを、操作できるまま残さないため。
   if (record.error) {
     return (
       <p role="alert" className="alert">
         {record.error.message}
       </p>
     );
+  }
+  if (record.data) {
+    return <TestcaseDetail key={testcaseId} api={api} record={record.data} selectedRunId={runId} />;
   }
   return <p className="muted">読み込み中…</p>;
 }
@@ -65,7 +66,9 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
       return { kind };
     },
     // 読んだものの入れ物は、画面を離れたあとに終わっても直す。
-    onSuccess: (done) => {
+    onSuccess: async (done) => {
+      // 途中の読み直しを止める。あとから届いた古い応答で、直したものが上書きされないように。
+      await queryClient.cancelQueries({ queryKey: queryKeys.testcases });
       if (done.kind === "approve") {
         queryClient.setQueryData(queryKeys.testcase(record.id), done.record);
         queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
@@ -80,6 +83,9 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
         queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
           list?.filter((t) => t.id !== record.id),
         );
+        // 「戻る」で開き直したときに、消したものを前に読んだまま出さないように。
+        queryClient.removeQueries({ queryKey: queryKeys.testcase(record.id), exact: true });
+        queryClient.removeQueries({ queryKey: queryKeys.runs(record.id), exact: true });
       }
     },
   });
