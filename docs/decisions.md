@@ -17,7 +17,8 @@
 - 外枠（上の帯・左の一覧）は、shadcn の Sidebar の部品ではなく、Tailwind で書いた。いまは一覧が一つだけで、Sidebar の部品（開け閉め・幅の記憶など）が要らないため。
 - e2e は、クラス名ではなく、役割（`getByRole`）と shadcn の `data-slot` で探す形にした。見た目を変えても落ちないように。
 - Tailwind・shadcn の CLI・`tw-animate-css` は、ビルドのときに CSS を作るのにだけ使うので、`devDependencies` に置いた。
-  画面を URL で分け、読み込みを TanStack Query に任せる
+
+## W7. 画面を URL で分け、読み込みを TanStack Query に任せる
 
 - 決めた人：AI（使う道具は親の D43）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
 - React Router 8 と TanStack Query 5 を入れた。React Router は宣言の形（`<Routes>`）にした。データの読み込みは TanStack Query が持つので、router の loader は使わない。router は外から渡す（本物とデモ版は `BrowserRouter`、テストは `MemoryRouter`）。
