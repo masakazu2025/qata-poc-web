@@ -83,6 +83,9 @@ export function createFakeServer(
     if (index < 0) return notFound();
     const record = server.testcases[index];
 
+    if (method === "GET" && !m[2]) {
+      return json(200, record, "testcase_record");
+    }
     if (method === "DELETE" && !m[2]) {
       server.testcases.splice(index, 1);
       return new Response(null, { status: 204 });

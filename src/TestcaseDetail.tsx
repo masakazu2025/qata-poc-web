@@ -1,61 +1,105 @@
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "react-router";
 import type { Api, Run, TestcaseRecord } from "./api";
 import { RunView } from "./RunView";
 import { describeStep, formatTime, reviewLabel, runLabel } from "./labels";
+import { pollInterval, queryKeys, runPath, testcasePath } from "./queries";
+
+type PageProps = { api: Api; pollMs: number };
+
+/** URL（/testcases/:testcaseId と、その下の /runs/:runId）から、テストケース一つの画面を出す。 */
+export function TestcasePage({ api, pollMs }: PageProps) {
+  const { testcaseId = "", runId } = useParams();
+  const queryClient = useQueryClient();
+  const record = useQuery({
+    queryKey: queryKeys.testcase(testcaseId),
+    queryFn: () => api.getTestcase(testcaseId),
+    // 一覧で読んだものがあれば、読み終えるまでそれを出す（URL を開いたときは一覧がまだないこともある）。
+    placeholderData: () =>
+      queryClient
+        .getQueryData<TestcaseRecord[]>(queryKeys.testcases)
+        ?.find((t) => t.id === testcaseId),
+    // 一覧と同じ間隔で読み直す。開いたままの画面で、ほかからの承認などが出るように。
+    refetchInterval: pollInterval(pollMs),
+  });
+
+  if (record.data) {
+    return <TestcaseDetail key={testcaseId} api={api} record={record.data} selectedRunId={runId} />;
+  }
+  if (record.error) {
+    return (
+      <p role="alert" className="alert">
+        {record.error.message}
+      </p>
+    );
+  }
+  return <p className="muted">読み込み中…</p>;
+}
+
+type Action = "approve" | "run" | "delete";
+type Done =
+  { kind: "approve"; record: TestcaseRecord } | { kind: "run"; run: Run } | { kind: "delete" };
 
 type Props = {
   api: Api;
   record: TestcaseRecord;
-  onChanged: (record: TestcaseRecord) => void;
-  onDeleted: (id: string) => void;
+  /** URL で選んだ実行の結果。なければ、いちばん新しいもの。 */
+  selectedRunId?: string;
 };
 
-export function TestcaseDetail({ api, record, onChanged, onDeleted }: Props) {
+export function TestcaseDetail({ api, record, selectedRunId }: Props) {
   const { testcase } = record;
-  const [runs, setRuns] = useState<Run[] | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"approve" | "run" | "delete" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .listRuns(record.id)
-      .then((list) => {
-        if (!alive) return;
-        setRuns(list);
-        setSelectedRunId(list[0]?.id ?? null);
-      })
-      .catch((e: Error) => alive && setError(e.message));
-    return () => {
-      alive = false;
-    };
-  }, [api, record.id]);
+  const runs = useQuery({
+    queryKey: queryKeys.runs(record.id),
+    queryFn: () => api.listRuns(record.id),
+  });
 
+  const action = useMutation({
+    mutationFn: async (kind: Action): Promise<Done> => {
+      if (kind === "approve") return { kind, record: await api.approveTestcase(record.id) };
+      if (kind === "run") return { kind, run: await api.runTestcase(record.id) };
+      await api.deleteTestcase(record.id);
+      return { kind };
+    },
+    // 読んだものの入れ物は、画面を離れたあとに終わっても直す。
+    onSuccess: (done) => {
+      if (done.kind === "approve") {
+        queryClient.setQueryData(queryKeys.testcase(record.id), done.record);
+        queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
+          list?.map((t) => (t.id === record.id ? done.record : t)),
+        );
+      } else if (done.kind === "run") {
+        queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
+          done.run,
+          ...(list ?? []),
+        ]);
+      } else {
+        queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
+          list?.filter((t) => t.id !== record.id),
+        );
+      }
+    },
+  });
+
+  // 画面の移動は、この画面にいるうちに終わったときだけ（mutate に渡したコールバックは、画面を離れると呼ばれない）。
+  const act = (kind: Action) =>
+    action.mutate(kind, {
+      onSuccess: (done) => {
+        if (done.kind === "run") void navigate(runPath(record.id, done.run.id));
+        if (done.kind === "delete") void navigate("/");
+      },
+    });
+
+  const busy = action.isPending ? action.variables : null;
+  const error = action.error ?? runs.error;
   const pending = record.review_status === "pending";
 
-  async function act(kind: "approve" | "run" | "delete") {
-    setBusy(kind);
-    setError(null);
-    try {
-      if (kind === "approve") {
-        onChanged(await api.approveTestcase(record.id));
-      } else if (kind === "run") {
-        const run = await api.runTestcase(record.id);
-        setRuns((list) => [run, ...(list ?? [])]);
-        setSelectedRunId(run.id);
-      } else {
-        await api.deleteTestcase(record.id);
-        onDeleted(record.id);
-        return;
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    }
-    setBusy(null);
-  }
-
-  const selectedRun = runs?.find((r) => r.id === selectedRunId) ?? null;
+  const selectedRun = selectedRunId
+    ? runs.data?.find((r) => r.id === selectedRunId)
+    : runs.data?.[0];
 
   return (
     <article className="detail">
@@ -76,7 +120,7 @@ export function TestcaseDetail({ api, record, onChanged, onDeleted }: Props) {
           disabled={busy !== null}
           onClick={() => {
             if (window.confirm(`「${testcase.title}」を消しますか？（実行の結果は残ります）`)) {
-              void act("delete");
+              act("delete");
             }
           }}
         >
@@ -116,7 +160,7 @@ export function TestcaseDetail({ api, record, onChanged, onDeleted }: Props) {
               type="button"
               className="primary"
               disabled={busy !== null}
-              onClick={() => void act("approve")}
+              onClick={() => act("approve")}
             >
               {busy === "approve" ? "承認中…" : "承認する"}
             </button>
@@ -127,7 +171,7 @@ export function TestcaseDetail({ api, record, onChanged, onDeleted }: Props) {
           className={pending ? "" : "primary"}
           disabled={pending || busy !== null}
           title={pending ? "承認するまで実行できません" : undefined}
-          onClick={() => void act("run")}
+          onClick={() => act("run")}
         >
           {busy === "run" ? "実行中…" : "実行する"}
         </button>
@@ -135,30 +179,38 @@ export function TestcaseDetail({ api, record, onChanged, onDeleted }: Props) {
 
       {error && (
         <p role="alert" className="alert">
-          {error}
+          {error.message}
         </p>
       )}
 
       <section className="runs" aria-label="実行の結果">
         <h3>実行の結果</h3>
-        {runs === null && !error && <p className="muted">読み込み中…</p>}
-        {runs?.length === 0 && <p className="muted">まだ実行していません。</p>}
-        {runs && runs.length > 0 && (
+        {runs.isPending && <p className="muted">読み込み中…</p>}
+        {runs.data?.length === 0 && <p className="muted">まだ実行していません。</p>}
+        {runs.data && runs.data.length > 0 && (
           <ul className="run-tabs">
-            {runs.map((run) => (
-              <li key={run.id}>
-                <button
-                  type="button"
-                  aria-current={run.id === selectedRunId ? "true" : undefined}
-                  className={run.id === selectedRunId ? "run-tab selected" : "run-tab"}
-                  onClick={() => setSelectedRunId(run.id)}
-                >
-                  <span className={`badge run-${run.status}`}>{runLabel[run.status]}</span>
-                  {formatTime(run.started_at)}
-                </button>
-              </li>
-            ))}
+            {runs.data.map((run) => {
+              const selected = run.id === selectedRun?.id;
+              return (
+                <li key={run.id}>
+                  <Link
+                    to={runPath(record.id, run.id)}
+                    aria-current={selected ? "page" : undefined}
+                    className={selected ? "link-button run-tab selected" : "link-button run-tab"}
+                  >
+                    <span className={`badge run-${run.status}`}>{runLabel[run.status]}</span>
+                    {formatTime(run.started_at)}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
+        )}
+        {runs.data && !selectedRun && selectedRunId && (
+          <p className="muted">
+            この実行の結果は見つかりません。
+            <Link to={testcasePath(record.id)}>いちばん新しい結果を見る</Link>
+          </p>
         )}
         {selectedRun && <RunView api={api} run={selectedRun} />}
       </section>

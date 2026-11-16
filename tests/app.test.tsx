@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { createApi, type Run, type TestcaseRecord } from "../src/api";
@@ -22,23 +23,39 @@ function failedRun(testcaseId: string, runId: string): Run {
   return run;
 }
 
-function start(server: FakeServer) {
-  render(<App api={createApi(BASE, server.fetch)} />);
+/** 今いる URL を、テストから読めるように出す。 */
+function Location() {
+  return <output aria-label="URL">{useLocation().pathname}</output>;
+}
+
+function renderAt(fetchImpl: typeof fetch, url = "/") {
+  render(
+    <MemoryRouter initialEntries={[url]}>
+      <App api={createApi(BASE, fetchImpl)} />
+      <Location />
+    </MemoryRouter>,
+  );
+}
+
+function start(server: FakeServer, url = "/") {
+  renderAt(server.fetch, url);
   return userEvent.setup();
 }
+
+const currentUrl = () => screen.getByRole("status", { name: "URL" });
 
 function sidebar() {
   return screen.getByRole("navigation", { name: "テストケースの一覧" });
 }
 
 async function openTestcase(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await within(sidebar()).findByRole("button", { name: TITLE }));
+  await user.click(await within(sidebar()).findByRole("link", { name: TITLE }));
 }
 
 describe("テストケースの一覧", () => {
   it("登録されたテストケースが、確認の状態と一緒に並ぶ", async () => {
     start(createFakeServer([pendingRecord(), exampleRecord()]));
-    const items = await within(sidebar()).findAllByRole("button", { name: TITLE });
+    const items = await within(sidebar()).findAllByRole("link", { name: TITLE });
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent("確認待ち");
     expect(items[1]).toHaveTextContent("承認済み");
@@ -46,8 +63,53 @@ describe("テストケースの一覧", () => {
 
   it("server に届かなければ、そう伝える", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-    render(<App api={createApi(BASE, fetchImpl)} />);
+    renderAt(fetchImpl);
     expect(await screen.findByRole("alert")).toHaveTextContent("server に届きません");
+  });
+
+  it("選ぶと、そのテストケースの URL に移る", async () => {
+    const user = start(createFakeServer([exampleRecord()]));
+    await openTestcase(user);
+    expect(currentUrl()).toHaveTextContent("/testcases/tc_1");
+    expect(within(sidebar()).getByRole("link", { name: TITLE })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+});
+
+describe("URL を開く", () => {
+  it("テストケース一つの URL を開くと、その詳細と、いちばん新しい実行の結果が出る", async () => {
+    const older = failedRun("tc_1", "run_old");
+    older.started_at = "2026-11-08T09:00:00+09:00";
+    start(createFakeServer([exampleRecord()], [exampleRun(), older]), "/testcases/tc_1");
+    expect(await screen.findByRole("heading", { name: TITLE })).toBeVisible();
+    const runs = screen.getByRole("region", { name: "実行の結果" });
+    expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
+  });
+
+  it("実行の結果一つの URL を開くと、その結果が出る", async () => {
+    const older = failedRun("tc_1", "run_old");
+    start(
+      createFakeServer([exampleRecord()], [exampleRun(), older]),
+      "/testcases/tc_1/runs/run_old",
+    );
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    expect(await within(runs).findByText("失敗", { selector: "strong" })).toBeVisible();
+    expect(within(runs).getByRole("link", { name: /失敗/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("ないテストケースの URL を開くと、server の説明が出る", async () => {
+    start(createFakeServer([exampleRecord()]), "/testcases/tc_none");
+    expect(await screen.findByRole("alert")).toHaveTextContent("見つかりません");
+  });
+
+  it("ない実行の結果の URL を開くと、見つからないと出る", async () => {
+    start(createFakeServer([exampleRecord()], [exampleRun()]), "/testcases/tc_1/runs/run_none");
+    expect(await screen.findByText(/この実行の結果は見つかりません/)).toBeVisible();
   });
 });
 
@@ -78,7 +140,7 @@ describe("人の確認", () => {
     expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "承認する" })).not.toBeInTheDocument();
     expect(server.calls).toContain("POST /testcases/tc_pending/approve");
-    expect(within(sidebar()).getByRole("button", { name: TITLE })).toHaveTextContent("承認済み");
+    expect(within(sidebar()).getByRole("link", { name: TITLE })).toHaveTextContent("承認済み");
   });
 
   it("確認の要らないものは、承認なしで実行できる", async () => {
@@ -95,7 +157,8 @@ describe("人の確認", () => {
     await openTestcase(user);
     await user.click(screen.getByRole("button", { name: "消す" }));
     expect(await screen.findByText("左の一覧からテストケースを選んでください。")).toBeVisible();
-    expect(within(sidebar()).queryByRole("button", { name: TITLE })).not.toBeInTheDocument();
+    expect(currentUrl()).toHaveTextContent(/^\/$/);
+    expect(within(sidebar()).queryByRole("link", { name: TITLE })).not.toBeInTheDocument();
     expect(server.calls).toContain("DELETE /testcases/tc_1");
   });
 });
@@ -110,6 +173,7 @@ describe("実行と結果", () => {
 
     const runs = screen.getByRole("region", { name: "実行の結果" });
     expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1\/runs\/run_new_\d+$/);
     const images = within(runs).getAllByRole("img");
     expect(images.map((i) => i.getAttribute("src"))).toEqual(
       ["ss_1", "ss_2", "ss_3", "ss_4", "ss_5"].map((id) => `${BASE}/screenshots/${id}`),
@@ -160,7 +224,7 @@ describe("実行と結果", () => {
 
     const runs = screen.getByRole("region", { name: "実行の結果" });
     expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
-    await user.click(within(runs).getByRole("button", { name: /失敗/ }));
+    await user.click(within(runs).getByRole("link", { name: /失敗/ }));
     expect(within(runs).getByText("失敗", { selector: "strong" })).toBeVisible();
   });
 });

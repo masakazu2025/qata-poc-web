@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Api, TestcaseRecord } from "./api";
-import { TestcaseDetail } from "./TestcaseDetail";
+import { useState } from "react";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { NavLink, Outlet, Route, Routes } from "react-router";
+import type { Api } from "./api";
+import { TestcasePage } from "./TestcaseDetail";
 import { formatTime, reviewLabel } from "./labels";
+import { createQueryClient, pollInterval, queryKeys, testcasePath } from "./queries";
 
 type Props = {
   api: Api;
@@ -9,42 +12,38 @@ type Props = {
   pollMs?: number;
 };
 
+/** 画面の全体。URL は外から渡す router（本物は BrowserRouter、テストは MemoryRouter）が持つ。 */
 export function App({ api, pollMs = 0 }: Props) {
-  const [testcases, setTestcases] = useState<TestcaseRecord[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // 状態は読み終えたあとのコールバックで変える（effect の中から同期で setState しない）。
-  const reload = useCallback(
-    () =>
-      api.listTestcases().then(
-        (list) => {
-          setTestcases(list);
-          setLoadError(null);
-        },
-        (e: unknown) => setLoadError((e as Error).message),
-      ),
-    [api],
+  const [queryClient] = useState(createQueryClient);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Routes>
+        <Route element={<Layout api={api} pollMs={pollMs} />}>
+          <Route
+            index
+            element={<p className="muted empty">左の一覧からテストケースを選んでください。</p>}
+          />
+          <Route
+            path="testcases/:testcaseId"
+            element={<TestcasePage api={api} pollMs={pollMs} />}
+          />
+          <Route
+            path="testcases/:testcaseId/runs/:runId"
+            element={<TestcasePage api={api} pollMs={pollMs} />}
+          />
+          <Route path="*" element={<p className="muted empty">この画面はありません。</p>} />
+        </Route>
+      </Routes>
+    </QueryClientProvider>
   );
+}
 
-  useEffect(() => {
-    void reload();
-    if (pollMs <= 0) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void reload();
-    }, pollMs);
-    return () => clearInterval(timer);
-  }, [reload, pollMs]);
-
-  const selected = testcases?.find((t) => t.id === selectedId) ?? null;
-
-  const onChanged = (record: TestcaseRecord) =>
-    setTestcases((list) => list?.map((t) => (t.id === record.id ? record : t)) ?? list);
-
-  const onDeleted = (id: string) => {
-    setTestcases((list) => list?.filter((t) => t.id !== id) ?? list);
-    setSelectedId(null);
-  };
+function Layout({ api, pollMs }: Required<Props>) {
+  const testcases = useQuery({
+    queryKey: queryKeys.testcases,
+    queryFn: api.listTestcases,
+    refetchInterval: pollInterval(pollMs),
+  });
 
   return (
     <div className="app">
@@ -56,29 +55,29 @@ export function App({ api, pollMs = 0 }: Props) {
         <nav className="sidebar" aria-label="テストケースの一覧">
           <div className="sidebar-head">
             <h2>テストケース</h2>
-            <button type="button" className="ghost" onClick={() => void reload()}>
+            <button type="button" className="ghost" onClick={() => void testcases.refetch()}>
               読み直す
             </button>
           </div>
-          {loadError && (
+          {testcases.error && (
             <p role="alert" className="alert">
-              {loadError}
+              {testcases.error.message}
             </p>
           )}
-          {testcases === null && !loadError && <p className="muted">読み込み中…</p>}
-          {testcases?.length === 0 && (
+          {testcases.isPending && <p className="muted">読み込み中…</p>}
+          {testcases.data?.length === 0 && (
             <p className="muted">
               まだありません。AI に日本語で頼むと、MCP で登録されてここに出ます。
             </p>
           )}
           <ul className="testcase-list">
-            {testcases?.map((t) => (
+            {testcases.data?.map((t) => (
               <li key={t.id}>
-                <button
-                  type="button"
-                  className={t.id === selectedId ? "testcase-item selected" : "testcase-item"}
-                  aria-current={t.id === selectedId ? "true" : undefined}
-                  onClick={() => setSelectedId(t.id)}
+                <NavLink
+                  to={testcasePath(t.id)}
+                  className={({ isActive }) =>
+                    isActive ? "link-button testcase-item selected" : "link-button testcase-item"
+                  }
                 >
                   <span className="testcase-title">{t.testcase.title}</span>
                   <span className="testcase-meta">
@@ -88,23 +87,13 @@ export function App({ api, pollMs = 0 }: Props) {
                     <span>{t.testcase.app_id}</span>
                     <span>{formatTime(t.created_at)}</span>
                   </span>
-                </button>
+                </NavLink>
               </li>
             ))}
           </ul>
         </nav>
         <main className="main">
-          {selected ? (
-            <TestcaseDetail
-              key={selected.id}
-              api={api}
-              record={selected}
-              onChanged={onChanged}
-              onDeleted={onDeleted}
-            />
-          ) : (
-            <p className="muted empty">左の一覧からテストケースを選んでください。</p>
-          )}
+          <Outlet />
         </main>
       </div>
     </div>

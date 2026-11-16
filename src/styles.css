@@ -58,6 +58,14 @@ button {
   background: var(--surface);
   color: var(--text);
 }
+/* 画面を移る（URL を変える）ものは a だが、ボタンと同じ見た目にする */
+a.link-button {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
 button:disabled {
   cursor: not-allowed;
   opacity: 0.5;

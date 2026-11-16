@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router";
 import { App } from "./App";
 import { createApi } from "./api";
 import "./styles.css";
@@ -11,7 +12,9 @@ if (import.meta.env.MODE === "demo") {
   void import("./demo").then(({ DemoApp, createDemo }) =>
     root.render(
       <StrictMode>
-        <DemoApp demo={createDemo()} />
+        <BrowserRouter>
+          <DemoApp demo={createDemo()} />
+        </BrowserRouter>
       </StrictMode>,
     ),
   );
@@ -20,7 +23,9 @@ if (import.meta.env.MODE === "demo") {
   const api = createApi(`${window.location.origin}/api`);
   root.render(
     <StrictMode>
-      <App api={api} pollMs={3000} />
+      <BrowserRouter>
+        <App api={api} pollMs={3000} />
+      </BrowserRouter>
     </StrictMode>,
   );
 }
