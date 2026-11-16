@@ -35,6 +35,10 @@ export function createApi(baseUrl: string, fetchImpl?: typeof fetch) {
 
   return {
     listTestcases: () => unwrap(client.GET("/testcases")),
+    getTestcase: (testcaseId: string) =>
+      unwrap(
+        client.GET("/testcases/{testcase_id}", { params: { path: { testcase_id: testcaseId } } }),
+      ),
     approveTestcase: (testcaseId: string) =>
       unwrap(
         client.POST("/testcases/{testcase_id}/approve", {

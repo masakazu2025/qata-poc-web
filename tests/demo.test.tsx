@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Run } from "../src/api";
 import { DemoApp, createDemo } from "../src/demo";
@@ -32,7 +33,7 @@ describe("デモ版に写したもの", () => {
 
 describe("デモ版の画面", () => {
   it("デモ版であることを出す", () => {
-    render(<DemoApp demo={createDemo("http://localhost")} pollMs={0} />);
+    render(<DemoApp demo={createDemo("http://localhost")} pollMs={0} />, { wrapper: MemoryRouter });
     expect(screen.getByRole("complementary", { name: "デモ版" })).toHaveTextContent(
       "再読み込みで最初に戻ります",
     );
@@ -40,12 +41,14 @@ describe("デモ版の画面", () => {
 
   it("登録 → 承認 → 実行 → スクショを一通り触れる", async () => {
     const user = userEvent.setup();
-    render(<DemoApp demo={createDemo("http://localhost")} pollMs={20} />);
+    render(<DemoApp demo={createDemo("http://localhost")} pollMs={20} />, {
+      wrapper: MemoryRouter,
+    });
     const sidebar = screen.getByRole("navigation", { name: "テストケースの一覧" });
-    await within(sidebar).findByRole("button", { name: /承認済み/ });
+    await within(sidebar).findByRole("link", { name: /承認済み/ });
 
     await user.click(screen.getByRole("button", { name: "AI に頼んだことにして、登録する" }));
-    await user.click(await within(sidebar).findByRole("button", { name: /確認待ち/ }));
+    await user.click(await within(sidebar).findByRole("link", { name: /確認待ち/ }));
 
     expect(screen.getByRole("button", { name: "実行する" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "承認する" }));

@@ -60,10 +60,11 @@ test("MCP で登録したテストケースを、web で承認して実行し、
 
   await test.step("web の一覧に出て、確認待ちなので実行できない", async () => {
     await page.goto("/");
-    const item = page.getByRole("button", { name: new RegExp(escape(title)) });
+    const item = page.getByRole("link", { name: new RegExp(escape(title)) });
     await expect(item).toBeVisible({ timeout: 10_000 }); // 一覧は 3 秒ごとに読み直す
     await item.click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await expect(page).toHaveURL(/\/testcases\/[^/]+$/);
     await expect(page.getByText("電卓で 1 + 2 = を押して")).toBeVisible();
     await expect(page.getByRole("button", { name: "実行する" })).toBeDisabled();
   });
@@ -94,6 +95,15 @@ test("MCP で登録したテストケースを、web で承認して実行し、
     await result.getByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }).click();
     await expect(page.getByRole("dialog", { name: "ステップ 5 のあとのスクショ" })).toBeVisible();
     await page.getByRole("button", { name: "閉じる" }).click();
+  });
+
+  await test.step("実行の結果の URL を開き直すと、同じ結果が出る", async () => {
+    await expect(page).toHaveURL(/\/testcases\/[^/]+\/runs\/[^/]+$/);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    const result = page.getByRole("region", { name: "実行の結果" });
+    await expect(result.locator(".run-summary strong")).toHaveText("成功");
+    await expect(result.locator(".run-step")).toHaveCount(5);
   });
 });
 
