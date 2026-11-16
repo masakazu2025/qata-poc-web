@@ -95,7 +95,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
       } else if (done.kind === "run") {
         queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
           done.run,
-          ...(list ?? []),
+          // 読み直しで先に届いていたら、二つ並べない。
+          ...(list ?? []).filter((r) => r.id !== done.run.id),
         ]);
       } else {
         queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
@@ -118,12 +119,14 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
     });
 
   // この画面で始めたものだけでなく、前に開いていたときに始めて、まだ終わっていないものも見る。
-  const pendingActions = useMutationState({
-    filters: { mutationKey: actionKey(record.id), status: "pending" },
-    select: (mutation) => mutation.state.variables as Action,
+  // 失敗も同じく、いちばん新しい操作のものを出す（離れている間に失敗しても、戻ったときに出るように）。
+  const actions = useMutationState({
+    filters: { mutationKey: actionKey(record.id) },
+    select: (mutation) => mutation.state,
   });
-  const busy = pendingActions[0] ?? null;
-  const error = action.error ?? runs.error;
+  const busy = (actions.find((a) => a.status === "pending")?.variables as Action) ?? null;
+  const latest = actions.at(-1);
+  const error = (latest?.status === "error" ? latest.error : null) ?? runs.error;
   const pending = record.review_status === "pending";
 
   const selectedRun = selectedRunId
