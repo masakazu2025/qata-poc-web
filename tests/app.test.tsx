@@ -183,6 +183,40 @@ describe("ほかからの変更と、画面の行き来", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
   });
+
+  it("実行中にほかのテストケースへ移って戻っても、実行できず、終わると結果が出る", async () => {
+    const server = createFakeServer([exampleRecord(), { ...exampleRecord(), id: "tc_2" }]);
+    let finishRun = () => {};
+    const slowFetch: typeof fetch = async (input, init) => {
+      const request = input as Request;
+      if (request.method === "POST" && request.url.endsWith("/runs")) {
+        await new Promise<void>((resolve) => (finishRun = resolve));
+      }
+      return server.fetch(input, init);
+    };
+    renderAt(slowFetch, "/testcases/tc_1");
+    const user = userEvent.setup();
+    expect(await screen.findByText("まだ実行していません。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "実行する" }));
+    expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+
+    const links = within(sidebar()).getAllByRole("link", { name: TITLE });
+    await user.click(links[1]);
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
+    // ほかのテストケースは実行できる（実行中なのは tc_1 だけ）
+    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+
+    await user.click(links[0]);
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1$/);
+    expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "消す" })).toBeDisabled();
+
+    finishRun();
+    const results = await screen.findByRole("region", { name: "実行の結果" });
+    expect(await within(results).findByRole("link", { name: /成功/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled();
+    expect(server.calls.filter((c) => c === "POST /testcases/tc_1/runs")).toHaveLength(1);
+  });
 });
 
 describe("人の確認", () => {
