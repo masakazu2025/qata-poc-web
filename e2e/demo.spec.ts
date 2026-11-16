@@ -78,9 +78,10 @@ test("MCP で登録したテストケースを、web で承認して実行し、
 
   await test.step("結果とスクショを見る", async () => {
     const result = page.getByRole("region", { name: "実行の結果" });
-    await expect(result.locator(".run-summary strong")).toHaveText("成功", { timeout: 30_000 });
-    await expect(result.locator(".run-step")).toHaveCount(5);
-    await expect(result.locator(".run-step .badge")).toHaveText(["OK", "OK", "OK", "OK", "OK"]);
+    await expect(result.locator("strong")).toHaveText("成功", { timeout: 30_000 });
+    const steps = result.getByRole("list", { name: "ステップごとの結果" }).getByRole("listitem");
+    await expect(steps).toHaveCount(5);
+    await expect(steps.locator('[data-slot="badge"]')).toHaveText(["OK", "OK", "OK", "OK", "OK"]);
     await expect(result.getByText("期待：3　実際：3")).toBeVisible();
 
     const shots = result.getByRole("img", { name: /のあとのスクショ/ });
@@ -102,8 +103,10 @@ test("MCP で登録したテストケースを、web で承認して実行し、
     await page.reload();
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
     const result = page.getByRole("region", { name: "実行の結果" });
-    await expect(result.locator(".run-summary strong")).toHaveText("成功");
-    await expect(result.locator(".run-step")).toHaveCount(5);
+    await expect(result.locator("strong")).toHaveText("成功");
+    await expect(
+      result.getByRole("list", { name: "ステップごとの結果" }).getByRole("listitem"),
+    ).toHaveCount(5);
   });
 });
 

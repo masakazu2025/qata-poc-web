@@ -1,12 +1,15 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
+import path from "node:path";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // web は /api を qata-server に中継する（server に CORS の設定を足さずに済むように）。
 const serverUrl = process.env.QATA_SERVER_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   server: {
     host: "127.0.0.1",
     port: 5173,

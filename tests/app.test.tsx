@@ -60,6 +60,13 @@ async function openTestcase(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await within(sidebar()).findByRole("link", { name: TITLE }));
 }
 
+/** 「消す」を押し、確かめの小窓でも「消す」を押す。 */
+async function deleteTestcase(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "消す" }));
+  const confirm = await screen.findByRole("alertdialog", { name: /を消しますか/ });
+  await user.click(within(confirm).getByRole("button", { name: "消す" }));
+}
+
 describe("テストケースの一覧", () => {
   it("登録されたテストケースが、確認の状態と一緒に並ぶ", async () => {
     start(createFakeServer([pendingRecord(), exampleRecord()]));
@@ -141,10 +148,9 @@ describe("ほかからの変更と、画面の行き来", () => {
   });
 
   it("消したあと戻ると、消したものは出ず、見つからないと出る", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = start(createFakeServer([exampleRecord()]));
     await openTestcase(user);
-    await user.click(screen.getByRole("button", { name: "消す" }));
+    await deleteTestcase(user);
     expect(await screen.findByText("左の一覧からテストケースを選んでください。")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "ブラウザで戻る" }));
@@ -216,12 +222,23 @@ describe("人の確認", () => {
     expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled();
   });
 
-  it("消すと一覧からなくなる", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("消すのをやめると、何も消えない", async () => {
     const server = createFakeServer([exampleRecord()]);
     const user = start(server);
     await openTestcase(user);
     await user.click(screen.getByRole("button", { name: "消す" }));
+    const confirm = await screen.findByRole("alertdialog", { name: /を消しますか/ });
+    await user.click(within(confirm).getByRole("button", { name: "やめる" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(currentUrl()).toHaveTextContent("/testcases/tc_1");
+    expect(server.calls).not.toContain("DELETE /testcases/tc_1");
+  });
+
+  it("消すと一覧からなくなる", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    const user = start(server);
+    await openTestcase(user);
+    await deleteTestcase(user);
     expect(await screen.findByText("左の一覧からテストケースを選んでください。")).toBeVisible();
     expect(currentUrl()).toHaveTextContent(/^\/$/);
     expect(within(sidebar()).queryByRole("link", { name: TITLE })).not.toBeInTheDocument();
@@ -239,7 +256,10 @@ describe("実行と結果", () => {
 
     const runs = screen.getByRole("region", { name: "実行の結果" });
     expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
-    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1\/runs\/run_new_\d+$/);
+    // 結果は、URL が移るより一瞬早く出ることがあるので、移るのを待つ
+    await vi.waitFor(() =>
+      expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1\/runs\/run_new_\d+$/),
+    );
     const images = within(runs).getAllByRole("img");
     expect(images.map((i) => i.getAttribute("src"))).toEqual(
       ["ss_1", "ss_2", "ss_3", "ss_4", "ss_5"].map((id) => `${BASE}/screenshots/${id}`),
@@ -256,6 +276,21 @@ describe("実行と結果", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("img")).toHaveAttribute("src", `${BASE}/screenshots/ss_5`);
     await user.click(within(dialog).getByRole("button", { name: "閉じる" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Esc でも閉じる
+    await user.click(
+      screen.getByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }),
+    );
+    expect(screen.getByRole("dialog", { name: "ステップ 5 のあとのスクショ" })).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // 大きくした画像を押しても閉じる
+    await user.click(
+      screen.getByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }),
+    );
+    await user.click(within(screen.getByRole("dialog")).getByRole("img"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

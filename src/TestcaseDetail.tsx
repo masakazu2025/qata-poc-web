@@ -1,8 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
+import { Alert } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import type { Api, Run, TestcaseRecord } from "./api";
 import { RunView } from "./RunView";
-import { describeStep, formatTime, reviewLabel, runLabel } from "./labels";
+import { describeStep, formatTime, reviewLabel, reviewTone, runLabel, runTone } from "./labels";
 import { pollInterval, queryKeys, runPath, testcasePath } from "./queries";
 
 type PageProps = { api: Api; pollMs: number };
@@ -25,16 +42,12 @@ export function TestcasePage({ api, pollMs }: PageProps) {
 
   // 読み直しが失敗したら、前に読んだものがあってもエラーを出す。ほかで消されたものを、操作できるまま残さないため。
   if (record.error) {
-    return (
-      <p role="alert" className="alert">
-        {record.error.message}
-      </p>
-    );
+    return <Alert variant="destructive">{record.error.message}</Alert>;
   }
   if (record.data) {
     return <TestcaseDetail key={testcaseId} api={api} record={record.data} selectedRunId={runId} />;
   }
-  return <p className="muted">読み込み中…</p>;
+  return <p className="text-muted-foreground">読み込み中…</p>;
 }
 
 type Action = "approve" | "run" | "delete";
@@ -108,93 +121,102 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
     : runs.data?.[0];
 
   return (
-    <article className="detail">
-      <div className="detail-head">
-        <div>
-          <h2>{testcase.title}</h2>
-          <p className="testcase-meta">
-            <span className={`badge review-${record.review_status}`}>
+    <article className="grid max-w-[1100px] gap-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid gap-1">
+          <h2 className="text-xl font-semibold">{testcase.title}</h2>
+          <p className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
+            <Badge variant={reviewTone[record.review_status]}>
               {reviewLabel[record.review_status]}
-            </span>
+            </Badge>
             <span>アプリ：{testcase.app_id}</span>
             <span>登録：{formatTime(record.created_at)}</span>
           </p>
         </div>
-        <button
-          type="button"
-          className="ghost danger"
-          disabled={busy !== null}
-          onClick={() => {
-            if (window.confirm(`「${testcase.title}」を消しますか？（実行の結果は残ります）`)) {
-              act("delete");
-            }
-          }}
-        >
-          消す
-        </button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" disabled={busy !== null}>
+              消す
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>「{testcase.title}」を消しますか？</AlertDialogTitle>
+              <AlertDialogDescription>実行の結果は残ります。</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>やめる</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={() => act("delete")}>
+                消す
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
-      <section className="compare" aria-label="手順とステップの見比べ">
-        <div className="panel">
-          <h3>元の手順（日本語）</h3>
-          <p className="instruction">{testcase.instruction}</p>
-          <label className="check">
-            <input type="checkbox" checked={testcase.needs_review} readOnly disabled />
-            実行の前に人が確認する
-          </label>
-        </div>
-        <div className="panel">
-          <h3>生成されたステップ</h3>
-          <ol className="steps">
-            {testcase.steps.map((step, i) => (
-              <li key={i} className={step.type === "expect_text" ? "step expect" : "step"}>
-                <span>{describeStep(step)}</span>
-                {step.note && <span className="note">{step.note}</span>}
-              </li>
-            ))}
-          </ol>
-        </div>
+      <section className="grid gap-4 lg:grid-cols-2" aria-label="手順とステップの見比べ">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">元の手順（日本語）</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <p className="text-base whitespace-pre-wrap">{testcase.instruction}</p>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox checked={testcase.needs_review} disabled />
+              実行の前に人が確認する
+            </label>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">生成されたステップ</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ol className="grid list-decimal gap-1 pl-6">
+              {testcase.steps.map((step, i) => (
+                <li key={i} className={cn("pl-1", step.type === "expect_text" && "font-semibold")}>
+                  <span>{describeStep(step)}</span>
+                  {step.note && (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {step.note}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="actions" aria-label="操作">
+      <section className="flex flex-wrap items-center gap-3" aria-label="操作">
         {pending && (
           <>
-            <p className="muted">
+            <p className="text-muted-foreground">
               人の確認待ちです。ステップを見比べて、よければ承認してください。
             </p>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy !== null}
-              onClick={() => act("approve")}
-            >
+            <Button disabled={busy !== null} onClick={() => act("approve")}>
               {busy === "approve" ? "承認中…" : "承認する"}
-            </button>
+            </Button>
           </>
         )}
-        <button
-          type="button"
-          className={pending ? "" : "primary"}
+        <Button
+          variant={pending ? "outline" : "default"}
           disabled={pending || busy !== null}
           title={pending ? "承認するまで実行できません" : undefined}
           onClick={() => act("run")}
         >
           {busy === "run" ? "実行中…" : "実行する"}
-        </button>
+        </Button>
       </section>
 
-      {error && (
-        <p role="alert" className="alert">
-          {error.message}
-        </p>
-      )}
+      {error && <Alert variant="destructive">{error.message}</Alert>}
 
-      <section className="runs" aria-label="実行の結果">
-        <h3>実行の結果</h3>
-        {runs.isPending && <p className="muted">読み込み中…</p>}
-        {runs.data?.length === 0 && <p className="muted">まだ実行していません。</p>}
+      <section className="grid gap-3" aria-label="実行の結果">
+        <h3 className="text-sm font-semibold text-muted-foreground">実行の結果</h3>
+        {runs.isPending && <p className="text-muted-foreground">読み込み中…</p>}
+        {runs.data?.length === 0 && <p className="text-muted-foreground">まだ実行していません。</p>}
         {runs.data && runs.data.length > 0 && (
-          <ul className="run-tabs">
+          <ul className="flex flex-wrap gap-2">
             {runs.data.map((run) => {
               const selected = run.id === selectedRun?.id;
               return (
@@ -202,9 +224,13 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
                   <Link
                     to={runPath(record.id, run.id)}
                     aria-current={selected ? "page" : undefined}
-                    className={selected ? "link-button run-tab selected" : "link-button run-tab"}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "gap-2 font-normal",
+                      selected && "border-primary",
+                    )}
                   >
-                    <span className={`badge run-${run.status}`}>{runLabel[run.status]}</span>
+                    <Badge variant={runTone[run.status]}>{runLabel[run.status]}</Badge>
                     {formatTime(run.started_at)}
                   </Link>
                 </li>
@@ -213,9 +239,14 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
           </ul>
         )}
         {runs.data && !selectedRun && selectedRunId && (
-          <p className="muted">
+          <p className="text-muted-foreground">
             この実行の結果は見つかりません。
-            <Link to={testcasePath(record.id)}>いちばん新しい結果を見る</Link>
+            <Link
+              to={testcasePath(record.id)}
+              className="text-primary underline underline-offset-4"
+            >
+              いちばん新しい結果を見る
+            </Link>
           </p>
         )}
         {selectedRun && <RunView api={api} run={selectedRun} />}

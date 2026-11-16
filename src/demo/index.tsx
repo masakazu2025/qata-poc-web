@@ -1,6 +1,7 @@
 // デモ版（vite build --mode demo）。本物の server の代わりに、ブラウザの中の偽の server を使う。
 // データは親の契約の例を写したもの（data/）と、電卓のスクショ（screenshots/）。再読み込みで最初に戻る。
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { App } from "../App";
 import { createApi, type Run, type Testcase, type TestcaseRecord } from "../api";
 import addExample from "./data/testcase.add.json";
@@ -59,21 +60,22 @@ export function DemoApp({ demo, pollMs = 1000 }: { demo: Demo; pollMs?: number }
   };
   return (
     <>
-      <aside className="demo-banner" aria-label="デモ版">
-        <p>
+      <aside
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-warning-muted px-6 py-3 text-sm text-warning"
+        aria-label="デモ版"
+      >
+        <p className="basis-full">
           <strong>デモ版</strong>
           です。server と runner
           の代わりに、ブラウザの中の偽物が動きます。スクショは本物の電卓を撮ったものです。再読み込みで最初に戻ります。
         </p>
-        <p>
+        <p className="basis-full">
           本物では、AI に日本語で「電卓で 1 + 2 = を押して、表示が 3
           になることを確かめて」と頼むと、AI がテストケースを作って登録し、ここに出ます。
         </p>
-        <button type="button" className="primary" onClick={() => void onRegister()}>
-          AI に頼んだことにして、登録する
-        </button>
+        <Button onClick={() => void onRegister()}>AI に頼んだことにして、登録する</Button>
         {registered > 0 && (
-          <span className="muted" role="status">
+          <span className="text-muted-foreground" role="status">
             登録しました。一覧の「確認待ち」を選んで、承認してから実行してください。
           </span>
         )}

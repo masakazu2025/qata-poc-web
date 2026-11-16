@@ -81,6 +81,8 @@ npm run dev
 
 画面は URL で開けます（React Router）。server からの読み込みと読み直しは TanStack Query に任せています。
 
+見た目は Tailwind CSS と shadcn/ui で書きます。shadcn/ui の部品は `src/components/ui/` に置いた手元のソースで、要るものは `npx shadcn add <部品>` で足します（設定は `components.json`）。色などの値は `src/index.css` に置き、クラスを手で書いた CSS は置きません。
+
 | URL                                      | 画面                                                 |
 | ---------------------------------------- | ---------------------------------------------------- |
 | `/`                                      | テストケースの一覧                                   |

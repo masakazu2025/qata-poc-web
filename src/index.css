@@ -1,0 +1,117 @@
+/* 見た目は Tailwind CSS と shadcn/ui（src/components/ui/）で書く。ここには色などの値だけを置く。 */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* 前と同じく、OS の設定に合わせて暗くする。 */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  /* 日本語の字が入ったフォントにする。 */
+  --font-sans: "Segoe UI", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* 色は、前の手書きの CSS と同じ値（青を基調に、成功は緑、失敗は赤、確認待ちは黄） */
+  --background: #f6f7f9;
+  --foreground: #1c2430;
+  --card: #ffffff;
+  --card-foreground: #1c2430;
+  --popover: #ffffff;
+  --popover-foreground: #1c2430;
+  --primary: #2457c5;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef1;
+  --secondary-foreground: #1c2430;
+  --muted: #eceef1;
+  --muted-foreground: #5d6877;
+  --accent: #eceef1;
+  --accent-foreground: #1c2430;
+  --destructive: #b42318;
+  --destructive-muted: #fdecea;
+  /* 成功（OK・承認済み）と、人の確認待ち */
+  --success: #1f7a45;
+  --success-muted: #e3f4ea;
+  --warning: #8a5a00;
+  --warning-muted: #fff3d6;
+  --border: #dde1e7;
+  --input: #dde1e7;
+  --ring: #2457c5;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #14181f;
+    --foreground: #e6e9ee;
+    --card: #1c222b;
+    --card-foreground: #e6e9ee;
+    --popover: #1c222b;
+    --popover-foreground: #e6e9ee;
+    --primary: #6d9bff;
+    --primary-foreground: #0b1220;
+    --secondary: #2a313b;
+    --secondary-foreground: #e6e9ee;
+    --muted: #2a313b;
+    --muted-foreground: #9aa4b2;
+    --accent: #2a313b;
+    --accent-foreground: #e6e9ee;
+    --destructive: #ff8a80;
+    --destructive-muted: #3d1a18;
+    --success: #6fd39a;
+    --success-muted: #173826;
+    --warning: #f5c56b;
+    --warning-muted: #3a2e12;
+    --border: #2f3743;
+    --input: #2f3743;
+    --ring: #6d9bff;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
