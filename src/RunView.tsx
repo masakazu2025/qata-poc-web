@@ -20,7 +20,7 @@ export function RunView({ api, run }: Props) {
       <p
         className={cn(
           "flex items-baseline gap-3 rounded-lg px-3.5 py-2.5",
-          passed ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+          passed ? "bg-success-muted text-success" : "bg-destructive-muted text-destructive",
         )}
       >
         <strong className="text-lg">{runLabel[run.status]}</strong>
@@ -84,21 +84,24 @@ export function RunView({ api, run }: Props) {
         })}
       </ol>
       <Dialog open={zoomed !== null} onOpenChange={(open) => !open && setZoomed(null)}>
+        {/* 前と同じく、黒の半透明の上に画像だけを出す */}
         <DialogContent
           showCloseButton={false}
           aria-describedby={undefined}
-          className="max-w-[calc(100%-2rem)] sm:max-w-5xl"
+          overlayClassName="bg-black/75 supports-backdrop-filter:backdrop-blur-none"
+          className="top-0 left-0 size-full max-w-none translate-x-0 translate-y-0 place-items-center rounded-none bg-transparent p-6 ring-0 sm:max-w-none"
+          onClick={() => setZoomed(null)}
         >
-          <DialogTitle>{zoomed?.alt}</DialogTitle>
+          <DialogTitle className="sr-only">{zoomed?.alt}</DialogTitle>
           {zoomed && (
             <img
               src={zoomed.src}
               alt={zoomed.alt}
-              className="max-h-[calc(100vh-160px)] w-full bg-white object-contain"
+              className="max-h-[calc(100vh-100px)] max-w-full bg-white"
             />
           )}
           <DialogClose asChild>
-            <Button variant="outline" className="justify-self-end">
+            <Button variant="outline" className="absolute top-4 right-4">
               閉じる
             </Button>
           </DialogClose>

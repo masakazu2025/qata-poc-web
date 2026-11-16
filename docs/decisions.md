@@ -9,10 +9,10 @@
 - 決めた人：AI（使う道具は親の D43）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
 - Tailwind CSS 4（`@tailwindcss/vite`）と shadcn/ui（CLI 4.23、`radix-nova`、色は `neutral`）を入れた。部品は shadcn の CLI で `src/components/ui/` に置き、手元のソースとして直してよいものにした。いま使うものだけを足した（ボタン・バッジ・カード・アラート・ダイアログ・確かめのダイアログ・チェックボックス）。
 - 手書きの `styles.css` はなくし、`src/index.css` には Tailwind と shadcn の読み込みと、色などの値だけを置く。クラスを手で書かない。
-- バッジに、成功（OK・承認済み）の `success` と、人の確認待ちの `warning` を足した。shadcn の既定には赤（`destructive`）しかないため。状態から色への対応は `labels.ts` に置く。
+- 色は、shadcn の既定（白黒の `neutral`）ではなく、前の手書きの CSS と同じ値を shadcn の色の名前に当てた（主の色は青、成功は緑、失敗は赤、確認待ちは黄。暗い色も前と同じ）。人のレビューで、前の色に戻すことにした（2026-11-17）。shadcn の既定にない、成功の `success`・確認待ちの `warning` と、それぞれの淡い背景（`*-muted`）を足し、バッジの色にした。状態から色への対応は `labels.ts` に置く。
 - フォントは、shadcn の既定の Geist ではなく、前と同じ日本語の入ったもの（Segoe UI・Yu Gothic UI・Meiryo）にした。Geist には日本語の字がない。
 - 暗い色は、shadcn の既定（`.dark` のクラス）ではなく、前と同じく OS の設定に従う（`prefers-color-scheme`）。切り替えのボタンはまだ要らない。
-- 消すときの確かめは、ブラウザの `window.confirm` から、shadcn の確かめのダイアログ（AlertDialog）にした。見た目をそろえるため。スクショの拡大は Dialog にした（Esc と「閉じる」で閉じる）。
+- 消すときの確かめは、ブラウザの `window.confirm` から、shadcn の確かめのダイアログ（AlertDialog）にした。見た目をそろえるため。スクショの拡大は Dialog にし、前と同じく、画面いっぱいの黒の半透明の上に画像だけを出す（どこを押しても、Esc でも、右上の「閉じる」でも閉じる）。そのため、Dialog の部品に後ろの幕の見た目を変える口（`overlayClassName`）を足した。
 - 部品は、shadcn の CLI の既定どおり `cn` のパッケージ（shadcn が出している、clsx と tailwind-merge の代わり）を使う。
 - 外枠（上の帯・左の一覧）は、shadcn の Sidebar の部品ではなく、Tailwind で書いた。いまは一覧が一つだけで、Sidebar の部品（開け閉め・幅の記憶など）が要らないため。
 - e2e は、クラス名ではなく、役割（`getByRole`）と shadcn の `data-slot` で探す形にした。見た目を変えても落ちないように。

@@ -256,7 +256,10 @@ describe("実行と結果", () => {
 
     const runs = screen.getByRole("region", { name: "実行の結果" });
     expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
-    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1\/runs\/run_new_\d+$/);
+    // 結果は、URL が移るより一瞬早く出ることがあるので、移るのを待つ
+    await vi.waitFor(() =>
+      expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1\/runs\/run_new_\d+$/),
+    );
     const images = within(runs).getAllByRole("img");
     expect(images.map((i) => i.getAttribute("src"))).toEqual(
       ["ss_1", "ss_2", "ss_3", "ss_4", "ss_5"].map((id) => `${BASE}/screenshots/${id}`),
@@ -281,6 +284,13 @@ describe("実行と結果", () => {
     );
     expect(screen.getByRole("dialog", { name: "ステップ 5 のあとのスクショ" })).toBeVisible();
     await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // 大きくした画像を押しても閉じる
+    await user.click(
+      screen.getByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }),
+    );
+    await user.click(within(screen.getByRole("dialog")).getByRole("img"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

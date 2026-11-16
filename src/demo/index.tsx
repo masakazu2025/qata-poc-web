@@ -61,7 +61,7 @@ export function DemoApp({ demo, pollMs = 1000 }: { demo: Demo; pollMs?: number }
   return (
     <>
       <aside
-        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-warning/10 px-6 py-3 text-sm text-warning"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-warning-muted px-6 py-3 text-sm text-warning"
         aria-label="デモ版"
       >
         <p className="basis-full">

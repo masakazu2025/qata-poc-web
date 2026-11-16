@@ -15,8 +15,11 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-muted: var(--destructive-muted);
   --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
   --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -41,52 +44,59 @@
 }
 
 :root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* 色は、前の手書きの CSS と同じ値（青を基調に、成功は緑、失敗は赤、確認待ちは黄） */
+  --background: #f6f7f9;
+  --foreground: #1c2430;
+  --card: #ffffff;
+  --card-foreground: #1c2430;
+  --popover: #ffffff;
+  --popover-foreground: #1c2430;
+  --primary: #2457c5;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef1;
+  --secondary-foreground: #1c2430;
+  --muted: #eceef1;
+  --muted-foreground: #5d6877;
+  --accent: #eceef1;
+  --accent-foreground: #1c2430;
+  --destructive: #b42318;
+  --destructive-muted: #fdecea;
   /* 成功（OK・承認済み）と、人の確認待ち */
-  --success: oklch(0.52 0.13 150);
-  --warning: oklch(0.55 0.13 75);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --success: #1f7a45;
+  --success-muted: #e3f4ea;
+  --warning: #8a5a00;
+  --warning-muted: #fff3d6;
+  --border: #dde1e7;
+  --input: #dde1e7;
+  --ring: #2457c5;
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --success: oklch(0.78 0.14 155);
-    --warning: oklch(0.82 0.13 85);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --background: #14181f;
+    --foreground: #e6e9ee;
+    --card: #1c222b;
+    --card-foreground: #e6e9ee;
+    --popover: #1c222b;
+    --popover-foreground: #e6e9ee;
+    --primary: #6d9bff;
+    --primary-foreground: #0b1220;
+    --secondary: #2a313b;
+    --secondary-foreground: #e6e9ee;
+    --muted: #2a313b;
+    --muted-foreground: #9aa4b2;
+    --accent: #2a313b;
+    --accent-foreground: #e6e9ee;
+    --destructive: #ff8a80;
+    --destructive-muted: #3d1a18;
+    --success: #6fd39a;
+    --success-muted: #173826;
+    --warning: #f5c56b;
+    --warning-muted: #3a2e12;
+    --border: #2f3743;
+    --input: #2f3743;
+    --ring: #6d9bff;
   }
 }
 
