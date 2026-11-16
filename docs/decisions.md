@@ -4,7 +4,20 @@
 
 ---
 
-## W7. 画面を URL で分け、読み込みを TanStack Query に任せる
+## W8. 見た目を Tailwind CSS と shadcn/ui に移す
+
+- 決めた人：AI（使う道具は親の D43）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
+- Tailwind CSS 4（`@tailwindcss/vite`）と shadcn/ui（CLI 4.23、`radix-nova`、色は `neutral`）を入れた。部品は shadcn の CLI で `src/components/ui/` に置き、手元のソースとして直してよいものにした。いま使うものだけを足した（ボタン・バッジ・カード・アラート・ダイアログ・確かめのダイアログ・チェックボックス）。
+- 手書きの `styles.css` はなくし、`src/index.css` には Tailwind と shadcn の読み込みと、色などの値だけを置く。クラスを手で書かない。
+- バッジに、成功（OK・承認済み）の `success` と、人の確認待ちの `warning` を足した。shadcn の既定には赤（`destructive`）しかないため。状態から色への対応は `labels.ts` に置く。
+- フォントは、shadcn の既定の Geist ではなく、前と同じ日本語の入ったもの（Segoe UI・Yu Gothic UI・Meiryo）にした。Geist には日本語の字がない。
+- 暗い色は、shadcn の既定（`.dark` のクラス）ではなく、前と同じく OS の設定に従う（`prefers-color-scheme`）。切り替えのボタンはまだ要らない。
+- 消すときの確かめは、ブラウザの `window.confirm` から、shadcn の確かめのダイアログ（AlertDialog）にした。見た目をそろえるため。スクショの拡大は Dialog にした（Esc と「閉じる」で閉じる）。
+- 部品は、shadcn の CLI の既定どおり `cn` のパッケージ（shadcn が出している、clsx と tailwind-merge の代わり）を使う。
+- 外枠（上の帯・左の一覧）は、shadcn の Sidebar の部品ではなく、Tailwind で書いた。いまは一覧が一つだけで、Sidebar の部品（開け閉め・幅の記憶など）が要らないため。
+- e2e は、クラス名ではなく、役割（`getByRole`）と shadcn の `data-slot` で探す形にした。見た目を変えても落ちないように。
+- Tailwind・shadcn の CLI・`tw-animate-css` は、ビルドのときに CSS を作るのにだけ使うので、`devDependencies` に置いた。
+  画面を URL で分け、読み込みを TanStack Query に任せる
 
 - 決めた人：AI（使う道具は親の D43）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
 - React Router 8 と TanStack Query 5 を入れた。React Router は宣言の形（`<Routes>`）にした。データの読み込みは TanStack Query が持つので、router の loader は使わない。router は外から渡す（本物とデモ版は `BrowserRouter`、テストは `MemoryRouter`）。

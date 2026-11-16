@@ -1,10 +1,19 @@
 // 契約の値を、画面に出す日本語に変える。
 import type { ReviewStatus, Run, RunStep, Step } from "./api";
 
+/** バッジの色（src/components/ui/badge.tsx の variant）。 */
+type Tone = "success" | "warning" | "destructive" | "secondary";
+
 export const reviewLabel: Record<ReviewStatus, string> = {
   pending: "確認待ち",
   approved: "承認済み",
   not_required: "確認不要",
+};
+
+export const reviewTone: Record<ReviewStatus, Tone> = {
+  pending: "warning",
+  approved: "success",
+  not_required: "secondary",
 };
 
 export const runLabel: Record<Run["status"], string> = {
@@ -13,11 +22,24 @@ export const runLabel: Record<Run["status"], string> = {
   error: "エラー",
 };
 
+export const runTone: Record<Run["status"], Tone> = {
+  passed: "success",
+  failed: "destructive",
+  error: "destructive",
+};
+
 export const runStepLabel: Record<RunStep["status"], string> = {
   passed: "OK",
   failed: "NG",
   error: "エラー",
   skipped: "未実行",
+};
+
+export const runStepTone: Record<RunStep["status"], Tone> = {
+  passed: "success",
+  failed: "destructive",
+  error: "destructive",
+  skipped: "secondary",
 };
 
 /** ステップを、人が読む一文にする。 */
