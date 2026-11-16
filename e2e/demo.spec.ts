@@ -3,23 +3,16 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { expect, test } from "@playwright/test";
-import { dataDir, parentDir, runnerUrl, serverDir } from "../playwright.config";
+import { parentDir, serverUrl } from "../playwright.config";
 
 type Structured = Record<string, unknown>;
 
 async function connectMcp(): Promise<Client> {
   const client = new Client({ name: "qata-e2e", version: "0.1.0" });
-  await client.connect(
-    new StdioClientTransport({
-      command: "uv",
-      args: ["run", "--directory", serverDir, "qata-server-mcp"],
-      // REST の server と同じ保存先を見る（qata-server の README）
-      env: { ...process.env, QATA_DATA_DIR: dataDir, QATA_RUNNER_URL: runnerUrl },
-      stderr: "pipe",
-    }),
-  );
+  // MCP は REST と同じ server のプロセスが /mcp で答える（qata-server の README）
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${serverUrl}/mcp`)));
   return client;
 }
 

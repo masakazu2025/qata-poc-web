@@ -16,7 +16,7 @@ export const parentDir = path.resolve(process.env.QATA_PARENT_DIR || path.join(w
 export const ports = { runner: 18001, server: 18000, web: 15173 };
 const runnerOperator = process.env.QATA_RUNNER_OPERATOR || "fake";
 export const runnerUrl = `http://127.0.0.1:${ports.runner}`;
-const serverUrl = `http://127.0.0.1:${ports.server}`;
+export const serverUrl = `http://127.0.0.1:${ports.server}`;
 const webUrl = `http://127.0.0.1:${ports.web}`;
 
 // 保存先は実行ごとに新しく作る。設定は worker でも読み直されるので、最初の一回だけ作って環境変数で渡す。
