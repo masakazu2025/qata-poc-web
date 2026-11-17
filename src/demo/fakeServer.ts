@@ -55,7 +55,12 @@ export function createFakeServer(
     const method = request.method;
     if (method === "GET" && path === "/testcases") {
       server.testcases.forEach((t) => check("testcase_record", t));
-      return json(200, server.testcases);
+      // 指定したタグを全部持つもの（文字の完全な一致）。
+      const tags = query.getAll("tag");
+      const list = server.testcases.filter((t) =>
+        tags.every((tag) => t.testcase.tags?.includes(tag)),
+      );
+      return json(200, list);
     }
     if (method === "POST" && path === "/testcases") {
       // 本物の server の関門（形式と部品の辞書）は持たない。受け取ったものをそのまま登録する。

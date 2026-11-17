@@ -1,14 +1,22 @@
 import { useState } from "react";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { NavLink, Outlet, Route, Routes } from "react-router";
+import { NavLink, Outlet, Route, Routes, useSearchParams } from "react-router";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Api } from "./api";
+import { TagList } from "./Tags";
 import { TestcasePage } from "./TestcaseDetail";
 import { formatTime, reviewLabel, reviewTone } from "./labels";
-import { createQueryClient, pollInterval, queryKeys, testcasePath } from "./queries";
+import {
+  createQueryClient,
+  pollInterval,
+  queryKeys,
+  selectedTags,
+  tagSearch,
+  testcasePath,
+} from "./queries";
 
 type Props = {
   api: Api;
@@ -44,11 +52,21 @@ function Empty({ children }: { children: string }) {
 }
 
 function Layout({ api, pollMs }: Required<Props>) {
+  const [search, setSearch] = useSearchParams();
+  const tags = selectedTags(search);
   const testcases = useQuery({
-    queryKey: queryKeys.testcases,
-    queryFn: api.listTestcases,
+    queryKey: queryKeys.testcaseList(tags),
+    queryFn: () => api.listTestcases(tags),
     refetchInterval: pollInterval(pollMs),
   });
+  // 選べるタグは、いま一覧に出ているものが持つタグ。全部持つものに絞るので、選ぶほど狭まる。
+  const choices = [
+    ...new Set([...tags, ...(testcases.data ?? []).flatMap((t) => t.testcase.tags ?? [])]),
+  ].sort();
+  const toggle = (tag: string) => {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    setSearch(new URLSearchParams(next.map((t) => ["tag", t])));
+  };
 
   return (
     <div>
@@ -71,16 +89,43 @@ function Layout({ api, pollMs }: Required<Props>) {
           </div>
           {testcases.error && <Alert variant="destructive">{testcases.error.message}</Alert>}
           {testcases.isPending && <p className="text-sm text-muted-foreground">読み込み中…</p>}
+          {choices.length > 0 && (
+            <div className="mb-3 grid gap-2" role="group" aria-label="タグで絞り込む">
+              <div className="flex flex-wrap gap-1.5">
+                {choices.map((tag) => (
+                  <Button
+                    key={tag}
+                    variant={tags.includes(tag) ? "default" : "outline"}
+                    size="xs"
+                    aria-pressed={tags.includes(tag)}
+                    onClick={() => toggle(tag)}
+                  >
+                    {tag}
+                  </Button>
+                ))}
+              </div>
+              {tags.length > 0 && (
+                <p className="flex items-center justify-between text-xs text-muted-foreground">
+                  選んだタグを全部持つものだけを出しています。
+                  <Button variant="link" size="xs" onClick={() => setSearch(new URLSearchParams())}>
+                    絞り込みを外す
+                  </Button>
+                </p>
+              )}
+            </div>
+          )}
           {testcases.data?.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              まだありません。AI に日本語で頼むと、MCP で登録されてここに出ます。
+              {tags.length > 0
+                ? "選んだタグを全部持つテストケースはありません。"
+                : "まだありません。AI に日本語で頼むと、MCP で登録されてここに出ます。"}
             </p>
           )}
           <ul className="grid gap-2">
             {testcases.data?.map((t) => (
               <li key={t.id}>
                 <NavLink
-                  to={testcasePath(t.id)}
+                  to={testcasePath(t.id) + tagSearch(tags)}
                   className={({ isActive }) =>
                     cn(
                       buttonVariants({ variant: "outline" }),
@@ -97,6 +142,7 @@ function Layout({ api, pollMs }: Required<Props>) {
                     <span>{t.testcase.app_id}</span>
                     <span>{formatTime(t.created_at)}</span>
                   </span>
+                  <TagList tags={t.testcase.tags} />
                 </NavLink>
               </li>
             ))}

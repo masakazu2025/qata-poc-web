@@ -28,7 +28,10 @@ function Location() {
   const navigate = useNavigate();
   return (
     <>
-      <output aria-label="URL">{useLocation().pathname}</output>
+      <output aria-label="URL">
+        {useLocation().pathname}
+        {useLocation().search}
+      </output>
       <button type="button" onClick={() => void navigate(-1)}>
         ブラウザで戻る
       </button>
@@ -90,6 +93,116 @@ describe("テストケースの一覧", () => {
       "aria-current",
       "page",
     );
+  });
+});
+
+function taggedRecord(id: string, title: string, tags: string[]): TestcaseRecord {
+  const record = exampleRecord();
+  return { ...record, id, testcase: { ...record.testcase, title, tags } };
+}
+
+/** 加算と減算と、タグのないもの。加算の二つは設計書のタグが違う。 */
+function taggedServer() {
+  return createFakeServer([
+    taggedRecord("tc_add_a", "足し算 A", ["機能:加算", "設計書:A"]),
+    taggedRecord("tc_add_b", "足し算 B", ["機能:加算", "設計書:B"]),
+    taggedRecord("tc_sub", "引き算", ["機能:減算", "設計書:A"]),
+    {
+      ...exampleRecord(),
+      id: "tc_plain",
+      testcase: { ...exampleRecord().testcase, tags: undefined },
+    },
+  ]);
+}
+
+const filter = () => within(sidebar()).getByRole("group", { name: "タグで絞り込む" });
+const listedTitles = () =>
+  within(sidebar())
+    .getAllByRole("link")
+    .map((link) => link.querySelector(".font-semibold")?.textContent);
+
+describe("タグ", () => {
+  it("一覧と詳細に、テストケースのタグが出る", async () => {
+    const user = start(createFakeServer([exampleRecord()]));
+    const item = await within(sidebar()).findByRole("link", { name: TITLE });
+    expect(within(item).getByRole("list", { name: "タグ" })).toHaveTextContent(
+      "機能:加算設計書:電卓の基本操作",
+    );
+    await openTestcase(user);
+    const main = screen.getByRole("main");
+    expect(within(main).getByRole("list", { name: "タグ" })).toHaveTextContent("機能:加算");
+  });
+
+  it("タグのないものは、タグを出さず、絞り込みも出さない", async () => {
+    const record = exampleRecord();
+    start(createFakeServer([{ ...record, testcase: { ...record.testcase, tags: undefined } }]));
+    const item = await within(sidebar()).findByRole("link", { name: TITLE });
+    expect(within(item).queryByRole("list", { name: "タグ" })).not.toBeInTheDocument();
+    expect(within(sidebar()).queryByRole("group", { name: "タグで絞り込む" })).toBeNull();
+  });
+
+  it("タグを選ぶと、選んだタグを全部持つものだけが並び、URL に残る", async () => {
+    const server = taggedServer();
+    const user = start(server);
+    await within(sidebar()).findByRole("link", { name: /引き算/ });
+
+    await user.click(within(filter()).getByRole("button", { name: "機能:加算" }));
+    await vi.waitFor(() => expect(listedTitles()).toEqual(["足し算 A", "足し算 B"]));
+    expect(within(filter()).getByRole("button", { name: "機能:加算" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(within(filter()).getByRole("button", { name: "設計書:A" }));
+    await vi.waitFor(() => expect(listedTitles()).toEqual(["足し算 A"]));
+    expect(currentUrl()).toHaveTextContent("/?tag=%E6%A9%9F%E8%83%BD%3A%E5%8A%A0%E7%AE%97&tag=");
+    // 絞り込みは server がする（REST の tag を繰り返す）。
+    expect(server.calls.at(-1)).toBe(
+      `GET /testcases?tag=${encodeURIComponent("機能:加算")}&tag=${encodeURIComponent("設計書:A")}`,
+    );
+
+    // 選んだものを押すと外れる。
+    await user.click(within(filter()).getByRole("button", { name: "機能:加算" }));
+    await vi.waitFor(() => expect(listedTitles()).toEqual(["足し算 A", "引き算"]));
+  });
+
+  it("絞り込みを外すと、全部に戻る", async () => {
+    const user = start(taggedServer(), "/?tag=機能:減算");
+    await vi.waitFor(() => expect(listedTitles()).toEqual(["引き算"]));
+    await user.click(within(sidebar()).getByRole("button", { name: "絞り込みを外す" }));
+    await vi.waitFor(() => expect(listedTitles()).toHaveLength(4));
+    expect(currentUrl()).toHaveTextContent(/^\/$/);
+  });
+
+  it("全部持つものがなければ、そう出る", async () => {
+    start(taggedServer(), "/?tag=機能:減算&tag=設計書:B");
+    expect(
+      await within(sidebar()).findByText("選んだタグを全部持つテストケースはありません。"),
+    ).toBeVisible();
+    // 選んだタグは、外せるように出しておく。
+    expect(within(filter()).getByRole("button", { name: "設計書:B" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("絞り込んだまま詳細を開いて実行しても、絞り込みが残る", async () => {
+    const user = start(taggedServer(), "/?tag=機能:減算");
+    await user.click(await within(sidebar()).findByRole("link", { name: /引き算/ }));
+    expect(currentUrl()).toHaveTextContent("/testcases/tc_sub?tag=");
+    await user.click(screen.getByRole("button", { name: "実行する" }));
+    await vi.waitFor(() => expect(currentUrl()).toHaveTextContent(/\/runs\/[^?]+\?tag=/));
+    expect(listedTitles()).toEqual(["引き算"]);
+  });
+
+  it("絞り込んだ一覧から承認すると、その一覧にも承認が出る", async () => {
+    const server = taggedServer();
+    server.testcases[2] = { ...server.testcases[2], review_status: "pending" };
+    const user = start(server, "/testcases/tc_sub?tag=機能:減算");
+    const item = await within(sidebar()).findByRole("link", { name: /引き算/ });
+    expect(item).toHaveTextContent("確認待ち");
+    await user.click(await screen.findByRole("button", { name: "承認する" }));
+    await vi.waitFor(() => expect(item).toHaveTextContent("承認済み"));
   });
 });
 

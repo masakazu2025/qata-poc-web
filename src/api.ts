@@ -34,7 +34,11 @@ export function createApi(baseUrl: string, fetchImpl?: typeof fetch) {
   }
 
   return {
-    listTestcases: () => unwrap(client.GET("/testcases")),
+    /** tags を渡すと、そのタグを全部持つものだけ（server が絞り込む）。 */
+    listTestcases: (tags: readonly string[] = []) =>
+      unwrap(
+        client.GET("/testcases", { params: { query: tags.length ? { tag: [...tags] } : {} } }),
+      ),
     getTestcase: (testcaseId: string) =>
       unwrap(
         client.GET("/testcases/{testcase_id}", { params: { path: { testcase_id: testcaseId } } }),
