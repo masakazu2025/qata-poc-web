@@ -166,6 +166,40 @@ describe("タグ", () => {
     await vi.waitFor(() => expect(listedTitles()).toEqual(["足し算 A", "引き算"]));
   });
 
+  it("タグを選んで読み終えるまで、前の一覧とタグが残る", async () => {
+    const server = taggedServer();
+    let release = () => {};
+    let waiting = false;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      // 絞り込んだ一覧だけ、release を呼ぶまで返さない（遅い server の代わり）。
+      if (new URL((input as Request).url).search.includes("tag=")) {
+        waiting = true;
+        await new Promise<void>((resolve) => (release = resolve));
+      }
+      return server.fetch(input, init);
+    };
+    renderAt(fetchImpl);
+    const user = userEvent.setup();
+    await within(sidebar()).findByRole("link", { name: /引き算/ });
+
+    await user.click(within(filter()).getByRole("button", { name: "機能:加算" }));
+    await vi.waitFor(() => expect(waiting).toBe(true));
+    expect(within(filter()).getByRole("button", { name: "設計書:B" })).toBeVisible();
+    expect(listedTitles()).toHaveLength(4);
+
+    release();
+    await vi.waitFor(() => expect(listedTitles()).toEqual(["足し算 A", "足し算 B"]));
+  });
+
+  it("空の ?tag= は、選んでいないものとする", async () => {
+    const server = taggedServer();
+    start(server, "/?tag=");
+    await vi.waitFor(() => expect(listedTitles()).toHaveLength(4));
+    expect(server.calls[0]).toBe("GET /testcases");
+    expect(within(filter()).queryByRole("button", { name: "" })).toBeNull();
+    expect(within(filter()).queryByRole("button", { pressed: true })).toBeNull();
+  });
+
   it("絞り込みを外すと、全部に戻る", async () => {
     const user = start(taggedServer(), "/?tag=機能:減算");
     await vi.waitFor(() => expect(listedTitles()).toEqual(["引き算"]));

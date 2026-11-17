@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, Route, Routes, useSearchParams } from "react-router";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +57,8 @@ function Layout({ api, pollMs }: Required<Props>) {
   const testcases = useQuery({
     queryKey: queryKeys.testcaseList(tags),
     queryFn: () => api.listTestcases(tags),
+    // タグを選び直したら、読み終えるまで前の一覧とタグを出しておく（続けて押すタグが消えないように）。
+    placeholderData: keepPreviousData,
     refetchInterval: pollInterval(pollMs),
   });
   // 選べるタグは、いま一覧に出ているものが持つタグ。全部持つものに絞るので、選ぶほど狭まる。

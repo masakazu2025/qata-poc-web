@@ -49,7 +49,8 @@ export const runPath = (testcaseId: string, runId: string) =>
 
 /** URL の ?tag=… で選んだタグ。重なりを除き、並びをそろえる（同じ組なら同じ入れ物を使うように）。 */
 export function selectedTags(search: URLSearchParams): string[] {
-  return [...new Set(search.getAll("tag"))].sort();
+  // 空のタグは契約にないので、選んでいないものとする（?tag= だけのとき）。
+  return [...new Set(search.getAll("tag").filter(Boolean))].sort();
 }
 
 /** 選んだタグを、URL の ?tag=… にする（REST の一覧と同じ書き方）。なければ空の文字。 */
