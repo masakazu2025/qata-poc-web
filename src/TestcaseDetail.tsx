@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import { Alert } from "@/components/ui/alert";
 import {
@@ -51,6 +51,7 @@ export function TestcasePage({ api, pollMs }: PageProps) {
 }
 
 type Action = "approve" | "run" | "delete";
+const actionKey = (testcaseId: string) => ["testcase-action", testcaseId] as const;
 type Done =
   { kind: "approve"; record: TestcaseRecord } | { kind: "run"; run: Run } | { kind: "delete" };
 
@@ -72,6 +73,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
   });
 
   const action = useMutation({
+    // 進行中の操作は入れ物（MutationCache）に残る。名前を付けておき、画面を作り直しても下で読み直す。
+    mutationKey: actionKey(record.id),
     mutationFn: async (kind: Action): Promise<Done> => {
       if (kind === "approve") return { kind, record: await api.approveTestcase(record.id) };
       if (kind === "run") return { kind, run: await api.runTestcase(record.id) };
@@ -82,6 +85,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
     onSuccess: async (done) => {
       // 途中の読み直しを止める。あとから届いた古い応答で、直したものが上書きされないように。
       await queryClient.cancelQueries({ queryKey: queryKeys.testcases });
+      // 実行中に画面を開き直すと、実行の結果の一覧を読み直す。その古い応答で、足した結果が消えないように。
+      await queryClient.cancelQueries({ queryKey: queryKeys.runs(record.id) });
       if (done.kind === "approve") {
         queryClient.setQueryData(queryKeys.testcase(record.id), done.record);
         queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
@@ -90,7 +95,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
       } else if (done.kind === "run") {
         queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
           done.run,
-          ...(list ?? []),
+          // 読み直しで先に届いていたら、二つ並べない。
+          ...(list ?? []).filter((r) => r.id !== done.run.id),
         ]);
       } else {
         queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
@@ -112,8 +118,15 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
       },
     });
 
-  const busy = action.isPending ? action.variables : null;
-  const error = action.error ?? runs.error;
+  // この画面で始めたものだけでなく、前に開いていたときに始めて、まだ終わっていないものも見る。
+  // 失敗も同じく、いちばん新しい操作のものを出す（離れている間に失敗しても、戻ったときに出るように）。
+  const actions = useMutationState({
+    filters: { mutationKey: actionKey(record.id) },
+    select: (mutation) => mutation.state,
+  });
+  const busy = (actions.find((a) => a.status === "pending")?.variables as Action) ?? null;
+  const latest = actions.at(-1);
+  const error = (latest?.status === "error" ? latest.error : null) ?? runs.error;
   const pending = record.review_status === "pending";
 
   const selectedRun = selectedRunId

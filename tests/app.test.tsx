@@ -183,7 +183,106 @@ describe("ほかからの変更と、画面の行き来", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
   });
+
+  it("実行中にほかのテストケースへ移って戻っても、実行できず、終わると結果が出る", async () => {
+    const server = createFakeServer([exampleRecord(), { ...exampleRecord(), id: "tc_2" }]);
+    let finishRun = () => {};
+    const slowFetch: typeof fetch = async (input, init) => {
+      const request = input as Request;
+      if (request.method === "POST" && request.url.endsWith("/runs")) {
+        await new Promise<void>((resolve) => (finishRun = resolve));
+      }
+      return server.fetch(input, init);
+    };
+    renderAt(slowFetch, "/testcases/tc_1");
+    const user = userEvent.setup();
+    expect(await screen.findByText("まだ実行していません。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "実行する" }));
+    expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+
+    const links = within(sidebar()).getAllByRole("link", { name: TITLE });
+    await user.click(links[1]);
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
+    // ほかのテストケースは実行できる（実行中なのは tc_1 だけ）
+    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+
+    await user.click(links[0]);
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1$/);
+    expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "消す" })).toBeDisabled();
+
+    finishRun();
+    const results = await screen.findByRole("region", { name: "実行の結果" });
+    expect(await within(results).findByRole("link", { name: /成功/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled();
+    expect(server.calls.filter((c) => c === "POST /testcases/tc_1/runs")).toHaveLength(1);
+  });
+
+  it("実行中にほかのテストケースへ移って戻り、実行が失敗すると、server の説明が出る", async () => {
+    const run = startHeldRun();
+    run.server.nextRun = () => null;
+    const user = userEvent.setup();
+    await run.leaveAndReturn(user);
+
+    run.finish();
+    expect(await screen.findByRole("alert")).toHaveTextContent("runner に届きません");
+    expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled();
+  });
+
+  it("戻ったときの結果の一覧の読み直しが、実行の終わりより遅く届いても、結果が残る", async () => {
+    const run = startHeldRun();
+    const user = userEvent.setup();
+    // 戻ったときに読む一覧は、実行の終わる前の中身のまま、終わったあとに届く
+    run.holdRunList = true;
+    await run.leaveAndReturn(user);
+
+    run.finish();
+    const results = screen.getByRole("region", { name: "実行の結果" });
+    expect(await within(results).findByRole("link", { name: /成功/ })).toBeInTheDocument();
+    run.releaseRunList();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(within(results).getAllByRole("link", { name: /成功/ })).toHaveLength(1);
+  });
 });
+
+/**
+ * tc_1 の実行を、finish() を呼ぶまで終わらせない形で始める。
+ * holdRunList を true にすると、それ以降の tc_1 の結果の一覧は、その時点の中身のまま、releaseRunList() まで届かない。
+ */
+function startHeldRun() {
+  const server = createFakeServer([exampleRecord(), { ...exampleRecord(), id: "tc_2" }]);
+  let finish = () => {};
+  let releaseRunList = () => {};
+  const runListGate = new Promise<void>((resolve) => (releaseRunList = resolve));
+  const held = {
+    server,
+    holdRunList: false,
+    finish: () => finish(),
+    releaseRunList: () => releaseRunList(),
+    async leaveAndReturn(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(await screen.findByRole("button", { name: "実行する" }));
+      expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+      const links = within(sidebar()).getAllByRole("link", { name: TITLE });
+      await user.click(links[1]);
+      expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+      await user.click(links[0]);
+      expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
+    },
+  };
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input as Request;
+    if (request.method === "POST" && request.url.endsWith("/runs")) {
+      await new Promise<void>((resolve) => (finish = resolve));
+    }
+    const holdThis =
+      held.holdRunList && request.method === "GET" && request.url.includes("testcase_id=tc_1");
+    const response = await server.fetch(input, init);
+    if (holdThis) await runListGate;
+    return response;
+  };
+  renderAt(fetchImpl, "/testcases/tc_1");
+  return held;
+}
 
 describe("人の確認", () => {
   it("元の日本語と、生成されたステップを見比べられる", async () => {
