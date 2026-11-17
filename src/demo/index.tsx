@@ -17,8 +17,38 @@ const screenshots = import.meta.glob<string>("./screenshots/*.png", {
 
 const copy = <T,>(value: unknown): T => structuredClone(value) as T;
 
+/**
+ * タグで絞り込むのを試せるように、契約の例を元に、題とタグだけを変えたものを並べる。
+ * 手順とスクショは例と同じ（1 + 2 = 3）なので、題もそれに合うものにする。確認は要らないものにする。
+ */
+const taggedVariants: { id: string; title: string; tags?: string[] }[] = [
+  {
+    id: "tc_demo_display",
+    title: "足し算の答えが表示に出ることを確かめる",
+    tags: ["機能:表示", "設計書:電卓の基本操作"],
+  },
+  {
+    id: "tc_demo_regression",
+    title: "1 + 2 の足し算（直したあとの確かめ）",
+    tags: ["機能:加算", "設計書:電卓の応用", "優先:高"],
+  },
+  { id: "tc_demo_untagged", title: "タグを付けていないテストケース" },
+];
+
+function demoTestcases(): TestcaseRecord[] {
+  const example = copy<TestcaseRecord>(recordExample);
+  const variants = taggedVariants.map(({ id, title, tags }) => {
+    const record = copy<TestcaseRecord>(recordExample);
+    record.testcase = { ...record.testcase, title, needs_review: false };
+    if (tags) record.testcase.tags = tags;
+    else delete record.testcase.tags;
+    return { ...record, id, review_status: "not_required" as const };
+  });
+  return [example, ...variants];
+}
+
 export function createDemo(origin = window.location.origin) {
-  const server = createFakeServer([copy(recordExample)], [copy(runExample)], {
+  const server = createFakeServer(demoTestcases(), [copy(runExample)], {
     nextRun: (testcaseId, runId) => {
       const finished = new Date();
       const started = new Date(finished.getTime() - 3000);

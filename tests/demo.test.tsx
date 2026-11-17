@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Run } from "../src/api";
 import { DemoApp, createDemo } from "../src/demo";
 import { contractsDir } from "./contract";
@@ -37,6 +37,21 @@ describe("デモ版の画面", () => {
     expect(screen.getByRole("complementary", { name: "デモ版" })).toHaveTextContent(
       "再読み込みで最初に戻ります",
     );
+  });
+
+  it("タグの違うテストケースが並び、タグで絞り込める", async () => {
+    const user = userEvent.setup();
+    render(<DemoApp demo={createDemo("http://localhost")} pollMs={0} />, { wrapper: MemoryRouter });
+    const sidebar = screen.getByRole("navigation", { name: "テストケースの一覧" });
+    await within(sidebar).findByRole("link", { name: /タグを付けていない/ });
+    expect(within(sidebar).getAllByRole("link")).toHaveLength(4);
+
+    const filter = within(sidebar).getByRole("group", { name: "タグで絞り込む" });
+    await user.click(within(filter).getByRole("button", { name: "機能:加算" }));
+    await vi.waitFor(() => expect(within(sidebar).getAllByRole("link")).toHaveLength(2));
+    await user.click(within(filter).getByRole("button", { name: "優先:高" }));
+    await vi.waitFor(() => expect(within(sidebar).getAllByRole("link")).toHaveLength(1));
+    expect(within(sidebar).getByRole("link")).toHaveTextContent("直したあとの確かめ");
   });
 
   it("登録 → 承認 → 実行 → スクショを一通り触れる", async () => {
