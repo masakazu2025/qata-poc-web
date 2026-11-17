@@ -1,5 +1,5 @@
 import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { Alert } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -18,9 +18,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Api, Run, TestcaseRecord } from "./api";
+import { TagList } from "./Tags";
 import { RunView } from "./RunView";
 import { describeStep, formatTime, reviewLabel, reviewTone, runLabel, runTone } from "./labels";
-import { pollInterval, queryKeys, runPath, testcasePath } from "./queries";
+import {
+  findInTestcaseLists,
+  pollInterval,
+  queryKeys,
+  runPath,
+  testcasePath,
+  updateTestcaseLists,
+} from "./queries";
 
 type PageProps = { api: Api; pollMs: number };
 
@@ -32,10 +40,7 @@ export function TestcasePage({ api, pollMs }: PageProps) {
     queryKey: queryKeys.testcase(testcaseId),
     queryFn: () => api.getTestcase(testcaseId),
     // 一覧で読んだものがあれば、読み終えるまでそれを出す（URL を開いたときは一覧がまだないこともある）。
-    placeholderData: () =>
-      queryClient
-        .getQueryData<TestcaseRecord[]>(queryKeys.testcases)
-        ?.find((t) => t.id === testcaseId),
+    placeholderData: () => findInTestcaseLists(queryClient, testcaseId),
     // 一覧と同じ間隔で読み直す。開いたままの画面で、ほかからの承認などが出るように。
     refetchInterval: pollInterval(pollMs),
   });
@@ -66,6 +71,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
   const { testcase } = record;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  // 一覧で選んだタグ（?tag=…）は、画面を移っても残す。
+  const { search } = useLocation();
 
   const runs = useQuery({
     queryKey: queryKeys.runs(record.id),
@@ -89,8 +96,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
       await queryClient.cancelQueries({ queryKey: queryKeys.runs(record.id) });
       if (done.kind === "approve") {
         queryClient.setQueryData(queryKeys.testcase(record.id), done.record);
-        queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
-          list?.map((t) => (t.id === record.id ? done.record : t)),
+        updateTestcaseLists(queryClient, (list) =>
+          list.map((t) => (t.id === record.id ? done.record : t)),
         );
       } else if (done.kind === "run") {
         queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
@@ -99,9 +106,7 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
           ...(list ?? []).filter((r) => r.id !== done.run.id),
         ]);
       } else {
-        queryClient.setQueryData<TestcaseRecord[]>(queryKeys.testcases, (list) =>
-          list?.filter((t) => t.id !== record.id),
-        );
+        updateTestcaseLists(queryClient, (list) => list.filter((t) => t.id !== record.id));
         // 「戻る」で開き直したときに、消したものを前に読んだまま出さないように。
         queryClient.removeQueries({ queryKey: queryKeys.testcase(record.id), exact: true });
         queryClient.removeQueries({ queryKey: queryKeys.runs(record.id), exact: true });
@@ -113,8 +118,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
   const act = (kind: Action) =>
     action.mutate(kind, {
       onSuccess: (done) => {
-        if (done.kind === "run") void navigate(runPath(record.id, done.run.id));
-        if (done.kind === "delete") void navigate("/");
+        if (done.kind === "run") void navigate(runPath(record.id, done.run.id) + search);
+        if (done.kind === "delete") void navigate("/" + search);
       },
     });
 
@@ -145,6 +150,7 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
             <span>アプリ：{testcase.app_id}</span>
             <span>登録：{formatTime(record.created_at)}</span>
           </p>
+          <TagList tags={testcase.tags} />
         </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -235,7 +241,7 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
               return (
                 <li key={run.id}>
                   <Link
-                    to={runPath(record.id, run.id)}
+                    to={runPath(record.id, run.id) + search}
                     aria-current={selected ? "page" : undefined}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "sm" }),
@@ -255,7 +261,7 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
           <p className="text-muted-foreground">
             この実行の結果は見つかりません。
             <Link
-              to={testcasePath(record.id)}
+              to={testcasePath(record.id) + search}
               className="text-primary underline underline-offset-4"
             >
               いちばん新しい結果を見る

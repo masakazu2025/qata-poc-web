@@ -275,6 +275,14 @@ export interface components {
             expected: string;
             note?: components["schemas"]["note"];
         };
+        /**
+         * @description テストケースに付ける目印一つ。機能・元の設計書などで絞り込むのに使う。「機能:加算」のように「種類:値」で書くのが慣習で、区切りは半角の「:」。慣習は契約では強制しない。全角と半角・大文字と小文字・前後の空白は整えず、別の文字として扱う（「機能：加算」と「機能:加算」は別のタグ）。
+         * @example 機能:加算
+         * @example 設計書:電卓の基本操作
+         */
+        tag: string;
+        /** @description テストケースに付けるタグの並び。同じタグは二度書かない。順は意味を持たない。 */
+        tags: components["schemas"]["tag"][];
         step: components["schemas"]["press_key"] | components["schemas"]["tap"] | components["schemas"]["expect_text"];
         /**
          * Testcase
@@ -286,6 +294,7 @@ export interface components {
             title: string;
             /** @description 元になった日本語の手順と確認事項。人がレビューするときに、生成されたステップと見比べる。 */
             instruction: string;
+            tags?: components["schemas"]["tags"];
             /** @description 実行の前に、人の確認を要るとするか（web のチェックボックス）。true なら、人が承認するまで実行できない。 */
             needs_review: boolean;
             /** @description 実行する順に並べたステップ。確認事項（expect_text）を少なくとも一つ含む。 */
@@ -343,6 +352,8 @@ export interface components {
             valid: boolean;
             errors: components["schemas"]["validation_error"][];
         };
+        /** @description 一覧の絞り込みに使うタグの並び。並べたタグを全部持つものだけを返す（AND、文字の完全な一致）。同じタグが重なっていたら一つと見なす。空の並びは、指定しないときと同じで、タグで絞り込まない。 */
+        tag_filter: components["schemas"]["tag"][];
         /** @description server が振る ID。中身の形は server が決め、他の部品は不透明な文字列として扱う。 */
         id: string;
         /**
@@ -499,6 +510,8 @@ export interface operations {
         parameters: {
             query?: {
                 app_id?: components["schemas"]["app_id"];
+                /** @description 指定したタグを全部持つものだけを返す。タグ一つごとに繰り返す（例：?tag=機能:加算&tag=設計書:電卓の基本操作）。一致は文字の完全な一致。同じタグの重なりは一つと見なす。指定しなければ、タグで絞り込まない。 */
+                tag?: components["schemas"]["tag_filter"];
             };
             header?: never;
             path?: never;

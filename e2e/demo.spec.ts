@@ -110,6 +110,67 @@ test("MCP で登録したテストケースを、web で承認して実行し、
   });
 });
 
+test("MCP でタグを付けて登録したテストケースを、web でタグで絞り込む", async ({ page }) => {
+  const stamp = new Date().toISOString();
+  // ほかのテストで登録したものと混ざらないように、この回だけのタグを付ける。
+  const runTag = `e2e:${stamp}`;
+  const otherTag = `e2e:ほか:${stamp}`;
+  const wanted = `絞り込みで出るもの（${stamp}）`;
+  const others = [
+    { title: `同じ機能で別の回のもの（${stamp}）`, tags: ["機能:加算", otherTag] },
+    { title: `タグのないもの（${stamp}）`, tags: undefined },
+  ];
+
+  await test.step("AI が MCP で、タグの違うテストケースを登録する", async () => {
+    const example = JSON.parse(
+      readFileSync(path.join(parentDir, "contracts/examples/testcase.add.json"), "utf-8"),
+    ) as Structured;
+    const client = await connectMcp();
+    try {
+      for (const { title, tags } of [{ title: wanted, tags: ["機能:加算", runTag] }, ...others]) {
+        const testcase: Structured = { ...example, title };
+        if (tags) testcase.tags = tags;
+        else delete testcase.tags;
+        const registered = await call(client, "register_testcase", { testcase });
+        expect(registered).toMatchObject({ registered: true });
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
+  await test.step("web でタグを選ぶと、そのタグを持つものだけが並ぶ", async () => {
+    await page.goto("/");
+    const list = page.getByRole("navigation", { name: "テストケースの一覧" });
+    for (const title of [wanted, ...others.map((o) => o.title)]) {
+      await expect(list.getByRole("link", { name: new RegExp(escape(title)) })).toBeVisible({
+        timeout: 10_000,
+      });
+    }
+    await list
+      .getByRole("group", { name: "タグで絞り込む" })
+      .getByRole("button", { name: runTag, exact: true })
+      .click();
+    await expect(page).toHaveURL(/\?tag=/);
+    await expect(list.getByRole("link")).toHaveCount(1);
+    await expect(list.getByRole("link", { name: new RegExp(escape(wanted)) })).toBeVisible();
+  });
+
+  await test.step("開き直しても絞り込みが残り、詳細にもタグが出る", async () => {
+    await page.reload();
+    const list = page.getByRole("navigation", { name: "テストケースの一覧" });
+    await expect(list.getByRole("link")).toHaveCount(1);
+    await list.getByRole("link", { name: new RegExp(escape(wanted)) }).click();
+    await expect(page.getByRole("heading", { name: wanted })).toBeVisible();
+    // タグの並びの順は意味を持たない（契約）ので、それぞれが出ていることだけを見る。
+    const tags = page.getByRole("main").getByRole("list", { name: "タグ" }).getByRole("listitem");
+    await expect(tags).toHaveCount(2);
+    for (const tag of ["機能:加算", runTag])
+      await expect(tags.filter({ hasText: tag })).toHaveCount(1);
+    await expect(list.getByRole("link")).toHaveCount(1);
+  });
+});
+
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
