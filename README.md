@@ -2,13 +2,7 @@
 
 [qata](https://github.com/masakazu2025/qata) の web です。AI が MCP で登録したテストケースを一覧にし、元の日本語の手順と生成されたステップを見比べて承認し、実行して、ステップごとの結果とスクショを見ます。server の REST API だけを使います。
 
-契約と全体の要件は、親のリポジトリ `qata` が正です。このリポジトリは、親と同じ作業フォルダに並べて置きます（`../qata/contracts/` を読むため）。親を別の場所に置くときは、環境変数 `QATA_PARENT_DIR` で親のリポジトリを指します。
-
-```
-作業フォルダ/
-├── qata/          ← 親
-└── qata-web/      ← ここ
-```
+契約と全体の要件は、親のリポジトリ `qata` が正です。契約は、その版を `qata-contracts/` に写して持つので（下の「読む契約の版」）、関門はこのリポジトリだけで回ります。端から端までのテストだけは、隣に qata-server と qata-runner を並べます。
 
 やることは、このリポジトリの GitHub の issue で管理しています。部品をまたぐものと全体の判断は、親の [qata の issue](https://github.com/masakazu2025/qata/issues) に置きます。
 
@@ -23,7 +17,24 @@ npm run check          # 型の検査・lint（ESLint）・テスト（生成し
 
 lint は `npm run lint` だけでも回せます。警告も一つあれば止まります（`--max-warnings 0`）。設定は `eslint.config.js`。
 
-テストの偽の server が返すものは、すべて親の契約（JSON Schema）で判定します。
+テストの偽の server が返すものは、すべて読む版の契約（JSON Schema）で判定します。
+
+CI は、写しを手で直していないか（`sync_contracts.mjs --check`）も確かめます。読む契約の版が親の最新より古いと警告を出します（関門は落としません。`sync_contracts.mjs --warn-if-old`）。
+
+## 読む契約の版
+
+web は、親の契約の版を一つ選んで写して持ち、その版だけを読みます。親の `main` が進んでも、ここで版を上げるまで前の版を読み続けます。隣に並べた親（`../qata/`）の中身は読みません。
+
+- 写し：`qata-contracts/`。親のタグ `contracts-v<版>` の `contracts/` を丸ごと写したもの。手で直しません。
+- 読む版：`qata-contracts/VERSION`。変更の記録は `qata-contracts/CHANGELOG.md`。
+- 型の生成・テスト（偽の server の判定・デモ版の写し）・端から端までのテストは、どれも `qata-contracts/` を読みます。
+
+版を上げるときは、写し直してから型を生成し直します。デモ版のデータ（`src/demo/data/`）も、`qata-contracts/examples/` から写し直します（違えば `npm test` が落ちます）。
+
+```
+node scripts/sync_contracts.mjs 1.1.0
+npm run generate
+```
 
 ## 端から端までのテスト
 
@@ -31,11 +42,12 @@ lint は `npm run lint` だけでも回せます。警告も一つあれば止�
 
 ```
 作業フォルダ/
-├── qata/
 ├── qata-runner/
 ├── qata-server/
 └── qata-web/      ← ここで npm run e2e
 ```
+
+web・server・runner は、それぞれ自分の `qata-contracts/` を読みます。web から契約の場所は渡しません。どの版どうしで動かしたかは、始めに「読む契約の版：web 1.0.0・server 1.0.0・runner 1.0.0」のように出し、まとめ（レポート）にも残します。版がずれていても、足すだけの違いならそのまま動きます。
 
 ```
 npx playwright install chromium   # 初めてのときだけ
@@ -63,7 +75,7 @@ main に入ると Vercel が公開し直します。pull request ごとにプレ
 
 ## 契約から型を生成する
 
-親の `openapi.yaml` から TypeScript の型を生成し、`src/contracts/openapi.ts` に置いてコミットします。手で直しません。契約が変わったら生成し直します。生成物が契約と合っているかは `npm test` で確かめます。
+読む版の `qata-contracts/openapi.yaml` から TypeScript の型を生成し、`src/contracts/openapi.ts` に置いてコミットします。手で直しません。契約が変わったら生成し直します。生成物が契約と合っているかは `npm test` で確かめます。
 
 ```
 npm run generate
