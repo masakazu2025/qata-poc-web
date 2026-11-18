@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   contractsIn,
   differences,
@@ -11,6 +11,7 @@ import {
   oldVersionNotice,
   warnIfOld,
   write,
+  main,
 } from "../scripts/sync_contracts.mjs";
 
 type Entry = { name: string; data?: string; type?: string; prefix?: string };
@@ -181,5 +182,61 @@ describe("古い版の警告", () => {
     expect(warnIfOld("1.0.0", () => lsRemote("contracts-v2.0.0"))).toMatch(
       /^::warning::.*2\.0\.0 より古い/,
     );
+  });
+});
+
+describe("道具の終了コード（CI はこれで落ちる）", () => {
+  const silence = () => {
+    const spies = [vi.spyOn(console, "log"), vi.spyOn(console, "error")];
+    for (const s of spies) s.mockImplementation(() => {});
+    return () => spies.forEach((s) => s.mockRestore());
+  };
+  const fetchTarball = (v: string) => {
+    expect(v).toBe("1.0.0");
+    return Promise.resolve(sample());
+  };
+
+  it("--check は、写しが同じなら 0、一字でも違えば 1", async () => {
+    const restore = silence();
+    try {
+      const dir = join(tempDir(), "qata-contracts");
+      write(sample(), dir);
+      expect(await main(["--check"], { fetchTarball, dir })).toBe(0);
+      writeFileSync(join(dir, "openapi.yaml"), "openapi: 3.1.1");
+      expect(await main(["--check"], { fetchTarball, dir })).toBe(1);
+      expect(await main(["--check", "1.0.0"], { fetchTarball, dir })).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("版を渡すと写し、引数の誤りは 2", async () => {
+    const restore = silence();
+    try {
+      const dir = join(tempDir(), "qata-contracts");
+      expect(await main(["1.0.0"], { fetchTarball, dir })).toBe(0);
+      expect(differences(sample(), dir)).toEqual([]);
+      expect(await main([], { fetchTarball, dir })).toBe(2);
+      expect(await main(["1.0"], { fetchTarball, dir })).toBe(2);
+      expect(await main(["1.0.0", "1.1.0"], { fetchTarball, dir })).toBe(2);
+      expect(await main(["--check", "--warn-if-old"], { fetchTarball, dir })).toBe(2);
+      expect(await main(["--force"], { fetchTarball, dir })).toBe(2);
+    } finally {
+      restore();
+    }
+  });
+
+  it("--warn-if-old は、タグが取れなくても 0", async () => {
+    const restore = silence();
+    try {
+      const dir = join(tempDir(), "qata-contracts");
+      write(sample(), dir);
+      const getTags = () => {
+        throw new Error("つながらない");
+      };
+      expect(await main(["--warn-if-old"], { dir, getTags })).toBe(0);
+    } finally {
+      restore();
+    }
   });
 });

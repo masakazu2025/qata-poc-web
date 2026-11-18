@@ -195,21 +195,33 @@ export function warnIfOld(current = readVersion(), getTags = listTags) {
   return oldVersionNotice(current, lsRemote);
 }
 
-async function main(args) {
+/**
+ * 引数のとおりに動き、終了コードを返す（0：済んだ・同じ、1：写しが違う、2：引数の誤り）。
+ * 取ってくる関数・写しの場所・タグの取り方は、テストから差し替えられる。
+ */
+export async function main(
+  args,
+  { fetchTarball = download, dir = copyDir, getTags = listTags } = {},
+) {
   const flags = args.filter((a) => a.startsWith("--"));
-  const [version] = args.filter((a) => !a.startsWith("--"));
-  if (flags.length > 1 || flags.some((f) => f !== "--check" && f !== "--warn-if-old")) {
+  const versions = args.filter((a) => !a.startsWith("--"));
+  const [version] = versions;
+  if (
+    flags.length > 1 ||
+    versions.length > 1 ||
+    flags.some((f) => f !== "--check" && f !== "--warn-if-old")
+  ) {
     console.error("使い方：sync_contracts.mjs <版> | --check [版] | --warn-if-old");
     return 2;
   }
   if (flags[0] === "--warn-if-old") {
-    console.log(warnIfOld());
+    console.log(warnIfOld(readVersion(dir), getTags));
     return 0;
   }
   if (flags[0] === "--check") {
-    const v = version ?? readVersion();
+    const v = version ?? readVersion(dir);
     // その版のタグの中身を取り直し、写しと比べる
-    const found = differences(await download(v));
+    const found = differences(await fetchTarball(v), dir);
     if (found.length > 0) {
       console.log(`qata-contracts/ が、親のタグ ${TAG_PREFIX}${v} と違う：`);
       for (const name of found) console.log(`  ${name}`);
@@ -223,8 +235,8 @@ async function main(args) {
     console.error(`写す版を三つの数で指定する（例：1.0.0）：${version ?? "なし"}`);
     return 2;
   }
-  write(await download(version));
-  console.log(`写した：${TAG_PREFIX}${version} → ${copyDir}`);
+  write(await fetchTarball(version), dir);
+  console.log(`写した：${TAG_PREFIX}${version} → ${dir}`);
   return 0;
 }
 

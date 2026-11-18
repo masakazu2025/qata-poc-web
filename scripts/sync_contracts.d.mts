@@ -11,3 +11,11 @@ export function newerVersion(current: string, lsRemote: string): string | undefi
 export function listTags(): string;
 export function oldVersionNotice(current: string, lsRemote: string): string;
 export function warnIfOld(current?: string, getTags?: () => string): string;
+export function main(
+  args: string[],
+  deps?: {
+    fetchTarball?: (version: string) => Promise<Buffer>;
+    dir?: string;
+    getTags?: () => string;
+  },
+): Promise<number>;
