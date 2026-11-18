@@ -2,7 +2,8 @@
 // 隣に並べた qata-server・qata-runner と、この web を立ち上げてつなぐ（W3）。
 // runner の操作は既定で偽物。QATA_RUNNER_OPERATOR=windows で本物の電卓を動かす（npm run e2e:windows、W5）。
 // 開発で立ち上げたものとぶつからないように、既定とは別の番号で待ち受ける。
-import { mkdtempSync } from "node:fs";
+// 契約は、web・server・runner がそれぞれ自分の qata-contracts/ を読む。web から契約の場所は渡さない。
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
@@ -10,8 +11,30 @@ import { defineConfig } from "@playwright/test";
 export const workDir = path.resolve(import.meta.dirname, "..");
 export const serverDir = path.join(workDir, "qata-server");
 export const runnerDir = path.join(workDir, "qata-runner");
-// 親のリポジトリ。環境変数 QATA_PARENT_DIR で指せる（runner・server にもそのまま渡る）。
-export const parentDir = path.resolve(process.env.QATA_PARENT_DIR || path.join(workDir, "qata"));
+// web が読む版の契約（e2e で使う例もここから読む）
+export const contractsDir = path.join(import.meta.dirname, "qata-contracts");
+
+/** そのリポジトリが読む契約の版。写しがなければ「不明」。 */
+export function contractVersion(repoDir: string): string {
+  try {
+    return readFileSync(path.join(repoDir, "qata-contracts", "VERSION"), "utf8").trim();
+  } catch {
+    return "不明";
+  }
+}
+
+// どの版どうしで動かしたかを、出力とレポートに残す。足すだけの違いなら、版がずれていても動く。
+const contractVersions = {
+  web: contractVersion(import.meta.dirname),
+  server: contractVersion(serverDir),
+  runner: contractVersion(runnerDir),
+};
+if (!process.env.QATA_E2E_VERSIONS_SHOWN) {
+  process.env.QATA_E2E_VERSIONS_SHOWN = "1";
+  const shown = Object.entries(contractVersions).map(([name, v]) => `${name} ${v}`);
+  const same = new Set(Object.values(contractVersions)).size === 1;
+  console.log(`読む契約の版：${shown.join("・")}${same ? "" : "（ずれている）"}`);
+}
 
 export const ports = { runner: 18001, server: 18000, web: 15173 };
 const runnerOperator = process.env.QATA_RUNNER_OPERATOR || "fake";
@@ -28,6 +51,7 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
+  metadata: { 読む契約の版: contractVersions },
   use: { baseURL: webUrl, screenshot: "on", trace: "retain-on-failure" },
   webServer: [
     {

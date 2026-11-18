@@ -1,4 +1,4 @@
-// 親の契約 qata/contracts/openapi.yaml から生成した型。手で直さない。
+// 読む版の契約 qata-contracts/openapi.yaml から生成した型。手で直さない。
 // 生成し直す：npm run generate
 
 export interface paths {

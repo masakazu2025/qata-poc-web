@@ -1,5 +1,5 @@
 # 関門（README の「関門」と「端から端までのテスト」）を回す。通らないと main にマージできない（ブランチの保護）。
-# 親の契約を読むために、親のリポジトリを丸ごと取ってきて隣に置き、QATA_PARENT_DIR で指す。
+# 契約は、このリポジトリの qata-contracts/ にある読む版の写しを読む。親のリポジトリは取ってこない。
 name: CI
 
 on:
@@ -11,8 +11,6 @@ jobs:
   check:
     name: check
     runs-on: ubuntu-latest
-    env:
-      QATA_PARENT_DIR: ${{ github.workspace }}/parent
     defaults:
       run:
         working-directory: qata-web
@@ -20,22 +18,21 @@ jobs:
       - uses: actions/checkout@v5
         with:
           path: qata-web
-      - uses: actions/checkout@v5
-        with:
-          repository: masakazu2025/qata
-          path: parent
       - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: npm ci
+      # 写しを手で直していないか（読む版のタグから写し直して、差分がないこと）
+      - run: node scripts/sync_contracts.mjs --check
+      # 読む版が親の最新より古ければ警告だけを出す。関門は落とさない
+      - run: node scripts/sync_contracts.mjs --warn-if-old
       - run: npm run check
 
   # 隣に並べた qata-server・qata-runner の main とつなぐ。runner は Windows で動くので、Windows で回す。
+  # server と runner は、それぞれ自分の qata-contracts/ を読む。どの版どうしかは e2e の出力に出る。
   e2e:
     name: e2e
     runs-on: windows-latest
-    env:
-      QATA_PARENT_DIR: ${{ github.workspace }}/parent
     defaults:
       run:
         working-directory: qata-web
@@ -43,10 +40,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           path: qata-web
-      - uses: actions/checkout@v5
-        with:
-          repository: masakazu2025/qata
-          path: parent
       - uses: actions/checkout@v5
         with:
           repository: masakazu2025/qata-server
