@@ -280,7 +280,8 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
             </Link>
           </p>
         )}
-        {selectedRun && <RunView api={api} run={selectedRun} />}
+        {/* 出す実行が変わったら作り直す。大きく見ていたスクショが、別の実行の上に残らないように。 */}
+        {selectedRun && <RunView key={selectedRun.id} api={api} run={selectedRun} />}
       </section>
     </article>
   );

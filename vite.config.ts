@@ -36,7 +36,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: "slow-server",
-          include: ["tests/app.test.tsx", "tests/demo.test.tsx"],
+          // include は元の設定と合わさるので、画面でないテストを外して、画面のテストだけにする。
+          exclude: ["tests/contracts.test.ts", "tests/sync-contracts.test.ts"],
           env: { QATA_FAKE_DELAY_MS: "20" },
         },
       },

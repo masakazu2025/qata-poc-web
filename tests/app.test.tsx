@@ -578,6 +578,25 @@ describe("実行と結果", () => {
     expect(within(runs).getByText(/期待：/)).toHaveTextContent("期待：3 実際：3");
   });
 
+  it("大きく見ている間にほかで実行されて、出す結果が変わると、大きく見ていたものは閉じる", async () => {
+    const server = createFakeServer([exampleRecord()], [exampleRun()]);
+    start(server, "/testcases/tc_1", 30);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    // AI が MCP から実行した代わりに、server に直に足す。URL で結果を選んでいないので、出すのはいちばん新しいものに変わる
+    server.runs.unshift(failedRun("tc_1", "run_mcp"));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const results = screen.getByRole("region", { name: "実行の結果" });
+    expect(within(results).getByRole("link", { name: /失敗/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("スクショを押すと大きく見られる", async () => {
     const user = start(createFakeServer([exampleRecord()], [exampleRun()]));
     await openTestcase(user);
