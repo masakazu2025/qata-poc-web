@@ -14,6 +14,8 @@ type ErrorResponse = Schemas["error_response"];
 /** API が失敗したとき。message は画面にそのまま出す。 */
 export class ApiError extends Error {}
 
+const unreachable = "server に届きません。qata-server が立ち上がっているか確かめてください。";
+
 /** web から見た server。テストでは偽の fetch を渡す。 */
 export function createApi(baseUrl: string, fetchImpl?: typeof fetch) {
   const client = createClient<paths>({ baseUrl, fetch: fetchImpl });
@@ -25,7 +27,7 @@ export function createApi(baseUrl: string, fetchImpl?: typeof fetch) {
     try {
       result = await call;
     } catch {
-      throw new ApiError("server に届きません。qata-server が立ち上がっているか確かめてください。");
+      throw new ApiError(unreachable);
     }
     if (result.error !== undefined || result.data === undefined) {
       throw new ApiError(describeError(result.error, result.response));
@@ -54,9 +56,7 @@ export function createApi(baseUrl: string, fetchImpl?: typeof fetch) {
         .DELETE("/testcases/{testcase_id}", { params: { path: { testcase_id: testcaseId } } })
         .catch(() => undefined);
       if (!result?.response.ok) {
-        throw new ApiError(
-          result ? describeError(result.error, result.response) : "server に届きません。",
-        );
+        throw new ApiError(result ? describeError(result.error, result.response) : unreachable);
       }
     },
     runTestcase: (testcaseId: string) =>
@@ -76,5 +76,8 @@ export type Api = ReturnType<typeof createApi>;
 
 function describeError(error: unknown, response: Response): string {
   const message = (error as ErrorResponse | undefined)?.error?.message;
-  return message ? message : `server がエラーを返しました（HTTP ${response.status}）。`;
+  if (message) return message;
+  // 開発用の中継（vite）は、server に届かないと本文なしの 502 を返す。server の 502 には説明が付く（runner に届かないなど）。
+  if (response.status === 502) return unreachable;
+  return `server がエラーを返しました（HTTP ${response.status}）。`;
 }

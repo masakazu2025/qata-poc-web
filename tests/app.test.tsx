@@ -9,6 +9,7 @@ import {
   exampleRecord,
   exampleRun,
   holdResponses,
+  respondWith,
   wait,
   type FakeServer,
 } from "./fakeServer";
@@ -657,5 +658,192 @@ describe("実行と結果", () => {
     expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
     await user.click(within(runs).getByRole("link", { name: /失敗/ }));
     expect(within(runs).getByText("失敗", { selector: "strong" })).toBeVisible();
+  });
+});
+
+/** 途中で止まった実行。3 つめのステップでエラーになり、残りは飛ばした。スクショは撮れたものだけ。 */
+function erroredRun(testcaseId: string, runId: string): Run {
+  const run: Run = {
+    ...exampleRun(),
+    id: runId,
+    testcase_id: testcaseId,
+    status: "error",
+    error: { code: "part_not_found", message: "部品「2」が見つかりません" },
+  };
+  run.steps = run.steps.map((s) => {
+    if (s.index < 2) return s;
+    const { step, index } = s;
+    return index === 2
+      ? { index, step, status: "error", message: "部品「2」が見つかりません" }
+      : { index, step, status: "skipped" };
+  });
+  return run;
+}
+
+const isRunList = (call: string) => call.startsWith("GET /runs");
+const runListError = { error: { code: "internal", message: "実行の結果を読めません" } };
+
+describe("エラーと、空・読み込み中の表示", () => {
+  it("結果の一覧の読み込みに失敗したあとに承認しても、エラーが残り、読み込み中とは出ない", async () => {
+    const server = createFakeServer([pendingRecord()]);
+    respondWith(server, isRunList, 500, runListError);
+    start(server, "/testcases/tc_pending");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    expect(await within(runs).findByRole("alert")).toHaveTextContent("実行の結果を読めません");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "承認する" }));
+    await enabledButton("実行する");
+    expect(within(runs).getByRole("alert")).toHaveTextContent("実行の結果を読めません");
+    expect(within(runs).queryByText("読み込み中…")).not.toBeInTheDocument();
+  });
+
+  it("結果の一覧を読んでいる間に承認しても、読み終えて、読み込み中のまま止まらない", async () => {
+    const server = createFakeServer(
+      [pendingRecord()],
+      [{ ...exampleRun(), testcase_id: "tc_pending" }],
+    );
+    const runList = holdResponses(server, isRunList);
+    start(server, "/testcases/tc_pending");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    await vi.waitFor(() => expect(runList.held()).toBe(1));
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "承認する" }));
+    await enabledButton("実行する");
+    runList.release();
+    expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
+    expect(within(runs).queryByText("読み込み中…")).not.toBeInTheDocument();
+  });
+
+  it("テストケースの一覧を読んでいる間に承認しても、読み終えて、読み込み中のまま止まらない", async () => {
+    const server = createFakeServer([pendingRecord()]);
+    const list = holdResponses(server, (call) => call === "GET /testcases");
+    start(server, "/testcases/tc_pending");
+    await vi.waitFor(() => expect(list.held()).toBe(1));
+
+    await userEvent.setup().click(await enabledButton("承認する"));
+    await enabledButton("実行する");
+    list.release();
+    expect(await within(sidebar()).findByRole("link", { name: TITLE })).toHaveTextContent(
+      "承認済み",
+    );
+    expect(within(sidebar()).queryByText("読み込み中…")).not.toBeInTheDocument();
+  });
+
+  it("結果の一覧の読み込みに失敗したあとに実行を断られると、両方のエラーが出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    respondWith(server, isRunList, 500, runListError);
+    respondWith(server, (call) => call === "POST /testcases/tc_1/runs", 409, {
+      error: { code: "runner_busy", message: "runner はほかの実行の最中です" },
+    });
+    start(server, "/testcases/tc_1");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    await within(runs).findByRole("alert");
+
+    await userEvent.setup().click(await enabledButton("実行する"));
+    const actions = screen.getByRole("region", { name: "操作" });
+    expect(await within(actions).findByRole("alert")).toHaveTextContent(
+      "runner はほかの実行の最中です",
+    );
+    expect(within(runs).getByRole("alert")).toHaveTextContent("実行の結果を読めません");
+  });
+
+  it("中継が本文なしの 502 を返したら、server に届かないと出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    respondWith(server, () => true, 502);
+    start(server);
+    const alert = await within(sidebar()).findByRole("alert");
+    expect(alert).toHaveTextContent("server に届きません");
+    expect(alert).not.toHaveTextContent("HTTP 502");
+  });
+
+  it("server が説明つきの 502 を返したら、その説明が出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    server.nextRun = () => null;
+    start(server, "/testcases/tc_1");
+    await userEvent.setup().click(await enabledButton("実行する"));
+    const actions = screen.getByRole("region", { name: "操作" });
+    expect(await within(actions).findByRole("alert")).toHaveTextContent("runner に届きません");
+    expect(within(actions).getByRole("alert")).not.toHaveTextContent("server に届きません");
+  });
+
+  it("途中で止まった実行は、エラーの理由と、エラーのステップと、飛ばしたステップが出る", async () => {
+    start(createFakeServer([exampleRecord()], [erroredRun("tc_1", "run_err")]), "/testcases/tc_1");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    expect(await within(runs).findByText("エラー", { selector: "strong" })).toBeVisible();
+    expect(within(runs).getByRole("alert")).toHaveTextContent(
+      "部品「2」が見つかりません（part_not_found）",
+    );
+    const steps = within(
+      within(runs).getByRole("list", { name: "ステップごとの結果" }),
+    ).getAllByRole("listitem");
+    expect(steps[2]).toHaveTextContent("エラー");
+    expect(steps[2]).toHaveTextContent("部品「2」が見つかりません");
+    expect(steps[3]).toHaveTextContent("未実行");
+    expect(steps[4]).toHaveTextContent("未実行");
+  });
+
+  it("スクショのないステップは、スクショなしと出る", async () => {
+    start(createFakeServer([exampleRecord()], [erroredRun("tc_1", "run_err")]), "/testcases/tc_1");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    const steps = within(
+      await within(runs).findByRole("list", { name: "ステップごとの結果" }),
+    ).getAllByRole("listitem");
+    expect(within(steps[1]).getByRole("img")).toBeVisible();
+    for (const step of steps.slice(2)) {
+      expect(within(step).queryByRole("img")).not.toBeInTheDocument();
+      expect(step).toHaveTextContent("スクショなし");
+    }
+  });
+
+  it("登録のあとで部品の辞書が変わって実行を断られると、server の説明が出て、また押せる", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    respondWith(server, (call) => call === "POST /testcases/tc_1/runs", 409, {
+      error: { code: "testcase_out_of_date", message: "いまの部品の辞書に合いません" },
+    });
+    start(server, "/testcases/tc_1");
+    await userEvent.setup().click(await enabledButton("実行する"));
+    const actions = screen.getByRole("region", { name: "操作" });
+    expect(await within(actions).findByRole("alert")).toHaveTextContent(
+      "いまの部品の辞書に合いません",
+    );
+    expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled();
+    expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1$/);
+  });
+
+  it("開いている間にほかで確認待ちに戻され、実行を断られると、server の説明が出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    start(server, "/testcases/tc_1");
+    const run = await enabledButton("実行する");
+    // ほかで確認待ちに戻された代わりに、server に直に書く（読み直していないので、画面は承認済みのまま）
+    server.testcases[0] = { ...server.testcases[0], review_status: "pending" };
+    await userEvent.setup().click(run);
+    const actions = screen.getByRole("region", { name: "操作" });
+    expect(await within(actions).findByRole("alert")).toHaveTextContent("人の確認待ちです");
+  });
+
+  it("テストケースが一つもなければ、そう出る", async () => {
+    start(createFakeServer([]));
+    expect(await within(sidebar()).findByText(/まだありません。AI に日本語で頼むと/)).toBeVisible();
+  });
+
+  it("一覧を読み終えるまで、読み込み中と出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    const list = holdResponses(server, (call) => call === "GET /testcases");
+    start(server);
+    expect(within(sidebar()).getByText("読み込み中…")).toBeVisible();
+    list.release();
+    expect(await within(sidebar()).findByRole("link", { name: TITLE })).toBeVisible();
+    expect(within(sidebar()).queryByText("読み込み中…")).not.toBeInTheDocument();
+  });
+
+  it("実行の結果の一覧を読み終えるまで、読み込み中と出る", async () => {
+    const server = createFakeServer([exampleRecord()], [exampleRun()]);
+    const runList = holdResponses(server, isRunList);
+    start(server, "/testcases/tc_1");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    expect(within(runs).getByText("読み込み中…")).toBeVisible();
+    runList.release();
+    expect(await within(runs).findByText("成功", { selector: "strong" })).toBeVisible();
+    expect(within(runs).queryByText("読み込み中…")).not.toBeInTheDocument();
   });
 });
