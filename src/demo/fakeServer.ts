@@ -9,6 +9,11 @@ export type FakeServer = {
   runs: Run[];
   /** 次の実行の結果を決める。null なら runner に届かない（502）。 */
   nextRun: (testcaseId: string, runId: string) => Run | null;
+  /**
+   * 応答を作ったあと、返す前に待つ（遅い server・順の入れ替わりの代わり）。call は calls に積むのと同じ「GET /testcases?tag=…」。
+   * 中身は作った時点のものなので、長く待たせた応答は、あとの操作より古いまま届く。
+   */
+  delay: (call: string) => Promise<void> | void;
   calls: string[];
 };
 
@@ -17,6 +22,7 @@ export type FakeServerOptions = {
   /** 返すものを、server.schema.json の $defs の名前で判定する。合わなければ投げる。 */
   check?: (def: string, value: unknown) => void;
   now?: () => string;
+  delay?: FakeServer["delay"];
 };
 
 export function createFakeServer(
@@ -32,12 +38,16 @@ export function createFakeServer(
     runs,
     calls: [],
     nextRun: options.nextRun,
+    delay: options.delay ?? (() => {}),
     fetch: async (input) => {
       const request = input as Request;
       const url = new URL(request.url);
       const path = url.pathname.replace(/^\/api/, "");
-      server.calls.push(`${request.method} ${path}${url.search}`);
-      return handle(request, path, url.searchParams);
+      const call = `${request.method} ${path}${url.search}`;
+      server.calls.push(call);
+      const response = await handle(request, path, url.searchParams);
+      await server.delay(call);
+      return response;
     },
   };
 

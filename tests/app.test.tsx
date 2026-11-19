@@ -4,7 +4,14 @@ import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { createApi, type Run, type TestcaseRecord } from "../src/api";
-import { createFakeServer, exampleRecord, exampleRun, type FakeServer } from "./fakeServer";
+import {
+  createFakeServer,
+  exampleRecord,
+  exampleRun,
+  holdResponses,
+  wait,
+  type FakeServer,
+} from "./fakeServer";
 
 const BASE = "http://localhost:3000/api";
 const TITLE = /1 \+ 2 の足し算/;
@@ -61,6 +68,18 @@ function sidebar() {
 
 async function openTestcase(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await within(sidebar()).findByRole("link", { name: TITLE }));
+}
+
+/**
+ * 押せるようになるまで待って、そのボタンを返す。
+ * findByRole は押せないボタンも見つけてすぐ返すので、押せるようになるのを待つときはこれを使う。
+ */
+async function enabledButton(name: string) {
+  return vi.waitFor(() => {
+    const button = screen.getByRole("button", { name });
+    expect(button).toBeEnabled();
+    return button;
+  });
 }
 
 /** 「消す」を押し、確かめの小窓でも「消す」を押す。 */
@@ -281,14 +300,60 @@ describe("ほかからの変更と、画面の行き来", () => {
     start(server, "/testcases/tc_pending", 30);
     expect(await screen.findByRole("button", { name: "承認する" })).toBeVisible();
     server.testcases[0] = { ...server.testcases[0], review_status: "approved" };
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: "実行する" })).toBeEnabled());
+    await enabledButton("実行する");
     expect(screen.queryByRole("button", { name: "承認する" })).not.toBeInTheDocument();
+  });
+
+  it("開いたままの詳細に、ほかで足された実行の結果が出る", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    start(server, "/testcases/tc_1", 30);
+    expect(await screen.findByText("まだ実行していません。")).toBeVisible();
+    // AI が MCP から実行した代わりに、server に直に足す
+    server.runs.unshift({ ...exampleRun(), id: "run_mcp", testcase_id: "tc_1" });
+    const results = screen.getByRole("region", { name: "実行の結果" });
+    expect(await within(results).findByRole("link", { name: /成功/ })).toBeInTheDocument();
+    expect(screen.queryByText("まだ実行していません。")).not.toBeInTheDocument();
+  });
+
+  it("承認の前に読んだ一覧が、承認のあとに届いても、承認が残る", async () => {
+    const server = createFakeServer([pendingRecord()]);
+    const user = start(server);
+    await openTestcase(user);
+    // 一覧の読み直しを、承認の前の中身のまま止める
+    const list = holdResponses(server, (call) => call === "GET /testcases");
+    await user.click(within(sidebar()).getByRole("button", { name: "読み直す" }));
+    await vi.waitFor(() => expect(list.held()).toBe(1));
+
+    await user.click(screen.getByRole("button", { name: "承認する" }));
+    await enabledButton("実行する");
+    expect(within(sidebar()).getByRole("link", { name: TITLE })).toHaveTextContent("承認済み");
+
+    list.release();
+    await wait(50);
+    expect(within(sidebar()).getByRole("link", { name: TITLE })).toHaveTextContent("承認済み");
+    expect(server.calls.filter((c) => c === "GET /testcases")).toHaveLength(2);
+  });
+
+  it("消す前に読んだ一覧が、消したあとに届いても、一覧に戻らない", async () => {
+    const server = createFakeServer([exampleRecord()]);
+    const user = start(server);
+    await openTestcase(user);
+    const list = holdResponses(server, (call) => call === "GET /testcases");
+    await user.click(within(sidebar()).getByRole("button", { name: "読み直す" }));
+    await vi.waitFor(() => expect(list.held()).toBe(1));
+
+    await deleteTestcase(user);
+    expect(await screen.findByText("左の一覧からテストケースを選んでください。")).toBeVisible();
+
+    list.release();
+    await wait(50);
+    expect(within(sidebar()).queryByRole("link", { name: TITLE })).not.toBeInTheDocument();
   });
 
   it("開いている間にほかで消されると、見つからないと出て、実行できない", async () => {
     const server = createFakeServer([exampleRecord()]);
     start(server, "/testcases/tc_1", 30);
-    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+    await enabledButton("実行する");
     server.testcases.splice(0, 1);
     expect(await screen.findByRole("alert")).toHaveTextContent("見つかりません");
     expect(screen.queryByRole("button", { name: "実行する" })).not.toBeInTheDocument();
@@ -351,7 +416,7 @@ describe("ほかからの変更と、画面の行き来", () => {
     await user.click(links[1]);
     expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_2$/);
     // ほかのテストケースは実行できる（実行中なのは tc_1 だけ）
-    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+    await enabledButton("実行する");
 
     await user.click(links[0]);
     expect(currentUrl()).toHaveTextContent(/^\/testcases\/tc_1$/);
@@ -411,7 +476,7 @@ function startHeldRun() {
       expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
       const links = within(sidebar()).getAllByRole("link", { name: TITLE });
       await user.click(links[1]);
-      expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+      await enabledButton("実行する");
       await user.click(links[0]);
       expect(await screen.findByRole("button", { name: "実行中…" })).toBeDisabled();
     },
@@ -455,7 +520,7 @@ describe("人の確認", () => {
     expect(screen.getByRole("button", { name: "実行する" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "承認する" }));
 
-    expect(await screen.findByRole("button", { name: "実行する" })).toBeEnabled();
+    await enabledButton("実行する");
     expect(screen.queryByRole("button", { name: "承認する" })).not.toBeInTheDocument();
     expect(server.calls).toContain("POST /testcases/tc_pending/approve");
     expect(within(sidebar()).getByRole("link", { name: TITLE })).toHaveTextContent("承認済み");
@@ -511,6 +576,25 @@ describe("実行と結果", () => {
       ["ss_1", "ss_2", "ss_3", "ss_4", "ss_5"].map((id) => `${BASE}/screenshots/${id}`),
     );
     expect(within(runs).getByText(/期待：/)).toHaveTextContent("期待：3 実際：3");
+  });
+
+  it("大きく見ている間にほかで実行されて、出す結果が変わると、大きく見ていたものは閉じる", async () => {
+    const server = createFakeServer([exampleRecord()], [exampleRun()]);
+    start(server, "/testcases/tc_1", 30);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: "ステップ 5 のあとのスクショを大きく見る" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    // AI が MCP から実行した代わりに、server に直に足す。URL で結果を選んでいないので、出すのはいちばん新しいものに変わる
+    server.runs.unshift(failedRun("tc_1", "run_mcp"));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const results = screen.getByRole("region", { name: "実行の結果" });
+    expect(within(results).getByRole("link", { name: /失敗/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("スクショを押すと大きく見られる", async () => {

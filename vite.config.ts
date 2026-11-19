@@ -28,5 +28,19 @@ export default defineConfig({
     // e2e/ は Playwright で別に回す（npm run e2e）
     include: ["tests/**/*.test.{ts,tsx}"],
     server: { deps: { inline: [] } },
+    projects: [
+      { extends: true, test: { name: "default" } },
+      // 画面のテストを、偽の server の応答を遅らせてもう一度回す（tests/fakeServer.ts の fakeDelayMs）。
+      // すぐに応答する偽物だけだと、待つつもりで待っていないテストもたまたま通るため。
+      {
+        extends: true,
+        test: {
+          name: "slow-server",
+          // include は元の設定と合わさるので、画面でないテストを外して、画面のテストだけにする。
+          exclude: ["tests/contracts.test.ts", "tests/sync-contracts.test.ts"],
+          env: { QATA_FAKE_DELAY_MS: "20" },
+        },
+      },
+    ],
   },
 });

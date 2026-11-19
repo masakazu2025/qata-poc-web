@@ -19,6 +19,8 @@ lint は `npm run lint` だけでも回せます。警告も一つあれば止�
 
 テストの偽の server が返すものは、すべて読む版の契約（JSON Schema）で判定します。
 
+画面のテストは、偽の server がすぐ応答するもの（組 `default`）と、応答を毎回 20ms 遅らせたもの（組 `slow-server`）の二通りで回します（`vite.config.ts`）。すぐ応答する偽物だけだと、待つつもりで待っていないテストがたまたま通るためです。古い応答があとから届く形は、`tests/fakeServer.ts` の `holdResponses` で、応答を止めてから流して確かめます。
+
 CI は、写しを手で直していないか（`sync_contracts.mjs --check`）も確かめます。読む契約の版が親の最新より古いと警告を出します（関門は落としません。`sync_contracts.mjs --warn-if-old`）。
 
 ## 読む契約の版
@@ -89,7 +91,7 @@ qata-server（と qata-runner）を立ち上げてから、
 npm run dev
 ```
 
-`http://127.0.0.1:5173` を開きます。`/api` は qata-server（既定は `http://127.0.0.1:8000`、変えるときは環境変数 `QATA_SERVER_URL`）に中継します。一覧は 3 秒ごとに読み直すので、AI が MCP で登録したものが開いたままの画面に出ます。
+`http://127.0.0.1:5173` を開きます。`/api` は qata-server（既定は `http://127.0.0.1:8000`、変えるときは環境変数 `QATA_SERVER_URL`）に中継します。一覧と、開いている詳細（実行の結果の一覧も）は 3 秒ごとに読み直すので、AI が MCP で登録・実行したものが開いたままの画面に出ます。
 
 画面は URL で開けます（React Router）。server からの読み込みと読み直しは TanStack Query に任せています。
 

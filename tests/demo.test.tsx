@@ -7,6 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Run } from "../src/api";
 import { DemoApp, createDemo } from "../src/demo";
 import { contractsDir } from "./contract";
+import { fakeDelay } from "./fakeServer";
+
+const demo = () => createDemo("http://localhost", { delay: fakeDelay });
 
 const demoDir = resolve("src/demo");
 // 改行は git の設定で CRLF にも LF にもなるので、そろえて比べる。
@@ -33,7 +36,7 @@ describe("デモ版に写したもの", () => {
 
 describe("デモ版の画面", () => {
   it("デモ版であることを出す", () => {
-    render(<DemoApp demo={createDemo("http://localhost")} pollMs={0} />, { wrapper: MemoryRouter });
+    render(<DemoApp demo={demo()} pollMs={0} />, { wrapper: MemoryRouter });
     expect(screen.getByRole("complementary", { name: "デモ版" })).toHaveTextContent(
       "再読み込みで最初に戻ります",
     );
@@ -41,7 +44,7 @@ describe("デモ版の画面", () => {
 
   it("タグの違うテストケースが並び、タグで絞り込める", async () => {
     const user = userEvent.setup();
-    render(<DemoApp demo={createDemo("http://localhost")} pollMs={0} />, { wrapper: MemoryRouter });
+    render(<DemoApp demo={demo()} pollMs={0} />, { wrapper: MemoryRouter });
     const sidebar = screen.getByRole("navigation", { name: "テストケースの一覧" });
     await within(sidebar).findByRole("link", { name: /タグを付けていない/ });
     expect(within(sidebar).getAllByRole("link")).toHaveLength(4);
@@ -56,7 +59,7 @@ describe("デモ版の画面", () => {
 
   it("登録 → 承認 → 実行 → スクショを一通り触れる", async () => {
     const user = userEvent.setup();
-    render(<DemoApp demo={createDemo("http://localhost")} pollMs={20} />, {
+    render(<DemoApp demo={demo()} pollMs={20} />, {
       wrapper: MemoryRouter,
     });
     const sidebar = screen.getByRole("navigation", { name: "テストケースの一覧" });
@@ -67,7 +70,14 @@ describe("デモ版の画面", () => {
 
     expect(screen.getByRole("button", { name: "実行する" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "承認する" }));
-    await user.click(await screen.findByRole("button", { name: "実行する" }));
+    // 承認の応答が届いて、押せるようになってから押す（ボタンは押せないまま前からある）。
+    await user.click(
+      await vi.waitFor(() => {
+        const run = screen.getByRole("button", { name: "実行する" });
+        expect(run).toBeEnabled();
+        return run;
+      }),
+    );
 
     const shots = await screen.findAllByRole("img");
     expect(shots).toHaveLength(5);
