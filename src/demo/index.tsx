@@ -7,7 +7,7 @@ import { createApi, type Run, type Testcase, type TestcaseRecord } from "../api"
 import addExample from "./data/testcase.add.json";
 import recordExample from "./data/testcase-record.json";
 import runExample from "./data/run.json";
-import { createFakeServer } from "./fakeServer";
+import { createFakeServer, type FakeServer } from "./fakeServer";
 
 const screenshots = import.meta.glob<string>("./screenshots/*.png", {
   eager: true,
@@ -47,8 +47,13 @@ function demoTestcases(): TestcaseRecord[] {
   return [example, ...variants];
 }
 
-export function createDemo(origin = window.location.origin) {
+/** delay はテストで偽の server の応答を遅らせるもの（tests/fakeServer.ts）。デモ版では渡さない。 */
+export function createDemo(
+  origin = window.location.origin,
+  { delay }: { delay?: FakeServer["delay"] } = {},
+) {
   const server = createFakeServer(demoTestcases(), [copy(runExample)], {
+    delay,
     nextRun: (testcaseId, runId) => {
       const finished = new Date();
       const started = new Date(finished.getTime() - 3000);

@@ -50,7 +50,15 @@ export function TestcasePage({ api, pollMs }: PageProps) {
     return <Alert variant="destructive">{record.error.message}</Alert>;
   }
   if (record.data) {
-    return <TestcaseDetail key={testcaseId} api={api} record={record.data} selectedRunId={runId} />;
+    return (
+      <TestcaseDetail
+        key={testcaseId}
+        api={api}
+        record={record.data}
+        selectedRunId={runId}
+        pollMs={pollMs}
+      />
+    );
   }
   return <p className="text-muted-foreground">読み込み中…</p>;
 }
@@ -65,9 +73,11 @@ type Props = {
   record: TestcaseRecord;
   /** URL で選んだ実行の結果。なければ、いちばん新しいもの。 */
   selectedRunId?: string;
+  /** 実行の結果の一覧を読み直す間隔（ミリ秒）。0 なら読み直さない。 */
+  pollMs?: number;
 };
 
-export function TestcaseDetail({ api, record, selectedRunId }: Props) {
+export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props) {
   const { testcase } = record;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -77,6 +87,8 @@ export function TestcaseDetail({ api, record, selectedRunId }: Props) {
   const runs = useQuery({
     queryKey: queryKeys.runs(record.id),
     queryFn: () => api.listRuns(record.id),
+    // 一覧と同じ間隔で読み直す。AI が MCP から実行した結果が、開いたままの画面に出るように。
+    refetchInterval: pollInterval(pollMs),
   });
 
   const action = useMutation({
