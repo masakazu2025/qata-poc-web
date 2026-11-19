@@ -747,6 +747,20 @@ describe("エラーと、空・読み込み中の表示", () => {
     expect(within(runs).getByRole("alert")).toHaveTextContent("実行の結果を読めません");
   });
 
+  it("結果の一覧の読み込みに失敗したあとに実行すると、前の実行も一覧に出る", async () => {
+    const older = failedRun("tc_1", "run_old");
+    const server = createFakeServer([exampleRecord()], [older]);
+    respondWith(server, isRunList, 500, runListError, 1);
+    start(server, "/testcases/tc_1");
+    const runs = await screen.findByRole("region", { name: "実行の結果" });
+    await within(runs).findByRole("alert");
+
+    await userEvent.setup().click(await enabledButton("実行する"));
+    expect(await within(runs).findByRole("link", { name: /失敗/ })).toBeVisible();
+    expect(within(runs).getByRole("link", { name: /成功/ })).toBeVisible();
+    expect(within(runs).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("中継が本文なしの 502 を返したら、server に届かないと出る", async () => {
     const server = createFakeServer([exampleRecord()]);
     respondWith(server, () => true, 502);

@@ -112,6 +112,10 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
           list.map((t) => (t.id === record.id ? done.record : t)),
         );
       } else if (done.kind === "run") {
+        // 一覧を読めていなければ、足したあとに読み直す（今回の 1 件だけで、前の実行がないように見えないように）。
+        if (queryClient.getQueryData(queryKeys.runs(record.id)) === undefined) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.runs(record.id) });
+        }
         queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
           done.run,
           // 読み直しで先に届いていたら、二つ並べない。
