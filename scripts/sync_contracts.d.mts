@@ -1,0 +1,21 @@
+export const copyDir: string;
+export function readVersion(dir?: string): string;
+export function download(version: string): Promise<Buffer>;
+export function tarFiles(tar: Buffer): Map<string, Buffer>;
+export function contractsIn(tarball: Buffer): Map<string, Buffer>;
+export function filesIn(dir: string): Map<string, Buffer>;
+export function write(tarball: Buffer, dir?: string): void;
+export function differences(tarball: Buffer, dir?: string): string[];
+export function parseVersion(text: string): number[] | undefined;
+export function newerVersion(current: string, lsRemote: string): string | undefined;
+export function listTags(): string;
+export function oldVersionNotice(current: string, lsRemote: string): string;
+export function warnIfOld(current?: string, getTags?: () => string): string;
+export function main(
+  args: string[],
+  deps?: {
+    fetchTarball?: (version: string) => Promise<Buffer>;
+    dir?: string;
+    getTags?: () => string;
+  },
+): Promise<number>;

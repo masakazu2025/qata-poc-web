@@ -4,6 +4,16 @@
 
 ---
 
+## W11. 読む契約の版を qata-contracts/ に写して持ち、写す道具は Node で書く
+
+- 決めた人：AI（持ち方は親の D54 と repos-and-contracts.md の「子の持ち方」）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
+- 写す道具は `scripts/sync_contracts.mjs`。server・runner の `sync_contracts.py` と同じ動き（版を写す・`--check`・`--warn-if-old`）にした。web は Python を使わないので、Node で書いた。
+- tarball は、依存を足さずに Node の `zlib` と自前の tar の読み方で開く。読むのは ustar と、GitHub の tarball にある pax のヘッダ（道が長いとき）だけ。tar のライブラリを足すほどの量でなく、OS の `tar` に頼ると Windows と Linux で動きが変わりうるため。
+- 型の宣言は、ほかの scripts と同じく `.d.mts` を横に置いた（テストから型付きで呼ぶため）。
+- `qata-contracts/` は prettier と ESLint にかけない（写しを書式で変えないように）。
+- e2e は、web・server・runner それぞれの `qata-contracts/VERSION` を読んで、始めに一行出し、レポートの metadata にも残す。版がずれていれば「（ずれている）」と添える。ずれていても止めない（足すだけの違いなら動き、止めると server か runner だけが先に版を上げたときに web の関門が落ちるため）。写しのない古い server・runner は「不明」と出す。
+- server と runner には、もう契約の場所を渡さない（`QATA_PARENT_DIR` は使っていない）。
+
 ## W10. タグの絞り込みは URL に持ち、server に任せる
 
 - 決めた人：AI（タグの形と絞り込みの意味は親の D49）　レビュー：未（人のレビューは要らない。PoC が終わったときにまとめて振り返る、親の D25）
@@ -66,7 +76,7 @@
 - 形は親の D30。`npm run build:demo`（`vite build --mode demo`）でデモ版を作り、`main.tsx` が本物の `/api` の代わりに `src/demo/` を読み込む。普通のビルドにはデモ版のものが入らない（動的な import）。Vercel は `vercel.json` で `build:demo` を使う。タスクの `VITE_DEMO=1` の代わりに mode にしたのは、Windows でも環境変数の書き方を気にせずに済むため。
 - 偽の server は一つ（`src/demo/fakeServer.ts`）にし、契約の判定を外から渡す形にした。テスト（`tests/fakeServer.ts`）は親の JSON Schema の判定を渡し、デモ版は渡さない（ブラウザに ajv と親の契約を持ち込まないため）。二つに分けると動きがずれるので、動きは共通にした。
 - 登録（`POST /testcases`）を偽の server に足した。デモ版には AI がいないので、「AI に頼んだことにして、登録する」のボタンで契約の例（`testcase.add.json`）を登録する。本物の server の関門（形式と部品の辞書）は持たない。
-- データは親の契約の例を `src/demo/data/` に写す（Vercel には隣の `../qata/` がない）。写したものが親の例と一字一句同じことをテストで確かめる。prettier にかけない（書式で変わらないように）。
+- データは親の契約の例を `src/demo/data/` に写す（Vercel には隣の `../qata/` がない）。写したものが親の例と一字一句同じことをテストで確かめる。prettier にかけない（書式で変わらないように）。→ W11 で、比べる相手を読む版の `qata-contracts/examples/` にした。
 - スクショは、この PC の本物の電卓（Windows 11）を、契約の例の手順のとおりに一度だけ撮ったもの（`src/demo/screenshots/`）。runner が本物になったら、その出力で撮り直してよい。実行の例の `screenshot_id` がすべて PNG で揃っていることをテストで確かめる。
 - デモ版であること・再読み込みで戻ること・本物では AI に日本語で頼むことを、画面の上の帯に出す。一覧の読み直しは 1 秒ごと（メモリの中なので軽い）。
 
@@ -103,7 +113,7 @@
   - 画面の観点（一覧・見比べ・承認・実行・結果とスクショ・失敗・runner に届かない）を、Testing Library で人の操作のとおりに確かめる。
 - Python の部品は観点を pytest-bdd の Gherkin で書くが、web は vitest の日本語のテスト名で書く。TypeScript で Gherkin を動かす道具を足すほどの数がないため。
 - 依存の向きの検査（import-linter に当たるもの）は置かない。ファイルが少なく、層を分けていないため。増えたら考える。
-- 親の契約は、作業フォルダで隣に並べた `../qata/` から読む（ほかの部品と同じ。次の周回で直す、親の ideas.md）。
+- 親の契約は、作業フォルダで隣に並べた `../qata/` から読む（ほかの部品と同じ。次の周回で直す、親の ideas.md）。→ W11 で、読む版の写し `qata-contracts/` を読むように変えた。
 - 作った最初から `.gitattributes` で改行を LF にそろえる（親の D24）。
 
 ## W5. 端から端までのテストを本物の runner で回す切り替え

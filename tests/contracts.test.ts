@@ -4,7 +4,7 @@ import { generate, outputPath } from "../scripts/generate-contracts.mjs";
 import { assertServerShape, readExample } from "./contract";
 
 describe("契約から生成した型", () => {
-  it("親の openapi.yaml から生成し直すと、コミットしたものと同じになる", async () => {
+  it("読む版の openapi.yaml から生成し直すと、コミットしたものと同じになる", async () => {
     const committed = readFileSync(outputPath, "utf8");
     expect(await generate()).toBe(committed);
   });

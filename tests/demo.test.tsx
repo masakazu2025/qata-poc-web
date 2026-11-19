@@ -13,7 +13,7 @@ const demoDir = resolve("src/demo");
 const readText = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 
 describe("デモ版に写したもの", () => {
-  it("data/ のファイルは、親の契約の例とまったく同じ", () => {
+  it("data/ のファイルは、読む版の契約の例（qata-contracts/examples/）とまったく同じ", () => {
     const files = readdirSync(`${demoDir}/data`);
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {

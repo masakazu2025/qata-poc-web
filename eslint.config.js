@@ -9,7 +9,14 @@ import tseslint from "typescript-eslint";
 export default defineConfig(
   // 生成物と出力は見ない（生成物は契約との一致をテストで確かめる）。
   {
-    ignores: ["dist/", "playwright-report/", "test-results/", "src/contracts/", "src/demo/data/"],
+    ignores: [
+      "dist/",
+      "playwright-report/",
+      "test-results/",
+      "src/contracts/",
+      "src/demo/data/",
+      "qata-contracts/",
+    ],
   },
   js.configs.recommended,
   // 画面の文言では、全角の空白を区切りに使う。

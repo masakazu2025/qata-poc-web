@@ -5,7 +5,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { expect, test } from "@playwright/test";
-import { parentDir, serverUrl } from "../playwright.config";
+import { contractsDir, serverUrl } from "../playwright.config";
 
 type Structured = Record<string, unknown>;
 
@@ -41,7 +41,7 @@ test("MCP で登録したテストケースを、web で承認して実行し、
 
       // 日本語の手順から AI が作るものとして、契約の例を使う
       const example = JSON.parse(
-        readFileSync(path.join(parentDir, "contracts/examples/testcase.add.json"), "utf-8"),
+        readFileSync(path.join(contractsDir, "examples/testcase.add.json"), "utf-8"),
       ) as Structured;
       const testcase = { ...example, title, needs_review: true };
 
@@ -123,7 +123,7 @@ test("MCP でタグを付けて登録したテストケースを、web でタグ
 
   await test.step("AI が MCP で、タグの違うテストケースを登録する", async () => {
     const example = JSON.parse(
-      readFileSync(path.join(parentDir, "contracts/examples/testcase.add.json"), "utf-8"),
+      readFileSync(path.join(contractsDir, "examples/testcase.add.json"), "utf-8"),
     ) as Structured;
     const client = await connectMcp();
     try {
