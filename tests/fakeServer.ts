@@ -28,6 +28,40 @@ export function createFakeServer(testcases: TestcaseRecord[], runs: Run[] = []):
 }
 
 /**
+ * match に合う呼び出しに、決めた応答を返す（server を通さない）。body は契約の error_response で判定する。
+ * body がなければ、開発用の中継（vite）が server に届かないときと同じ、本文なしの応答にする。
+ * times を渡すと、その回数だけ。
+ */
+export function respondWith(
+  server: FakeServer,
+  match: (call: string) => boolean,
+  status: number,
+  body?: { error: { code: string; message: string } },
+  times = Infinity,
+) {
+  if (body) assertServerShape("error_response", body);
+  const fetchImpl = server.fetch;
+  let left = times;
+  server.fetch = async (input, init) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    const call = `${request.method} ${url.pathname.replace(/^\/api/, "")}${url.search}`;
+    if (left > 0 && match(call)) {
+      left--;
+      server.calls.push(call);
+      await server.delay(call);
+      return body
+        ? new Response(JSON.stringify(body), {
+            status,
+            headers: { "Content-Type": "application/json" },
+          })
+        : new Response("", { status, headers: { "Content-Type": "text/plain" } });
+    }
+    return fetchImpl(input, init);
+  };
+}
+
+/**
  * match に合う応答を、作った時点の中身のまま、release() を呼ぶまで止める。
  * 止めている間にほかの操作をすれば、その操作より古い応答があとから届く形になる。
  */

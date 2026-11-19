@@ -112,6 +112,10 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
           list.map((t) => (t.id === record.id ? done.record : t)),
         );
       } else if (done.kind === "run") {
+        // 一覧を読めていなければ、足したあとに読み直す（今回の 1 件だけで、前の実行がないように見えないように）。
+        if (queryClient.getQueryData(queryKeys.runs(record.id)) === undefined) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.runs(record.id) });
+        }
         queryClient.setQueryData<Run[]>(queryKeys.runs(record.id), (list) => [
           done.run,
           // 読み直しで先に届いていたら、二つ並べない。
@@ -123,6 +127,13 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
         queryClient.removeQueries({ queryKey: queryKeys.testcase(record.id), exact: true });
         queryClient.removeQueries({ queryKey: queryKeys.runs(record.id), exact: true });
       }
+      // 止めたのが最初の読み込みだと、読む前の状態に戻ったまま、もう読まない（「読み込み中…」で止まる）。読み直す。
+      const neverLoaded = {
+        predicate: (query: { state: { data: unknown } }) => query.state.data === undefined,
+      };
+      // 読み終えるのを待たない（待つと、そのあいだ操作が終わらず、ボタンが押せないままになる）。
+      void queryClient.invalidateQueries({ queryKey: queryKeys.testcases, ...neverLoaded });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs(record.id), ...neverLoaded });
     },
   });
 
@@ -143,7 +154,8 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
   });
   const busy = (actions.find((a) => a.status === "pending")?.variables as Action) ?? null;
   const latest = actions.at(-1);
-  const error = (latest?.status === "error" ? latest.error : null) ?? runs.error;
+  // 操作の失敗と、実行の結果の一覧の読み込みの失敗は、別に出す。片方が出ても、もう片方を隠さないように。
+  const actionError = latest?.status === "error" ? latest.error : null;
   const pending = record.review_status === "pending";
 
   const selectedRun = selectedRunId
@@ -238,12 +250,16 @@ export function TestcaseDetail({ api, record, selectedRunId, pollMs = 0 }: Props
         >
           {busy === "run" ? "実行中…" : "実行する"}
         </Button>
+        {actionError && (
+          <Alert variant="destructive" className="basis-full">
+            {actionError.message}
+          </Alert>
+        )}
       </section>
-
-      {error && <Alert variant="destructive">{error.message}</Alert>}
 
       <section className="grid gap-3" aria-label="実行の結果">
         <h3 className="text-sm font-semibold text-muted-foreground">実行の結果</h3>
+        {runs.error && <Alert variant="destructive">{runs.error.message}</Alert>}
         {runs.isPending && <p className="text-muted-foreground">読み込み中…</p>}
         {runs.data?.length === 0 && <p className="text-muted-foreground">まだ実行していません。</p>}
         {runs.data && runs.data.length > 0 && (
